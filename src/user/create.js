@@ -16,11 +16,11 @@ module.exports = function (User) {
         data.username = data.username.trim();
         data.userslug = slugify(data.username);
         if (data.email !== undefined) {
-            console.log(data.email)
+            console.log(data.email);
             data.email = String(data.email).trim();
         }
         if (data.accounttype !== undefined) {
-            console.log(data.accounttype)
+            console.log(data.accounttype);
             data.accounttype = data.accounttype.trim();
         }
 
@@ -51,7 +51,7 @@ module.exports = function (User) {
         let userData = {
             username: data.username,
             userslug: data.userslug,
-            accounttype: data.accounttype || 'student',  // tag only works if student option chosen
+            accounttype: data.accounttype || 'student', // tag only works if student option chosen
             email: data.email || '',
             joindate: timestamp,
             lastonline: timestamp,
