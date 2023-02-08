@@ -51,7 +51,7 @@ module.exports = function (User) {
         let userData = {
             username: data.username,
             userslug: data.userslug,
-            accounttype: data.accounttype || 'student', // tag only works if student option chosen
+            accounttype: data['account-type'] || 'student',
             email: data.email || '',
             joindate: timestamp,
             lastonline: timestamp,
