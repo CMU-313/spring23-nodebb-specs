@@ -16,12 +16,10 @@ module.exports = function (User) {
         data.username = data.username.trim();
         data.userslug = slugify(data.username);
         if (data.email !== undefined) {
-            console.log(data.email);
             data.email = String(data.email).trim();
         }
-        if (data.accounttype !== undefined) {
-            console.log(data.accounttype);
-            data.accounttype = data.accounttype.trim();
+        if (data['account-type'] !== undefined) {
+            data.accounttype = data['account-type'].trim();
         }
 
         await User.isDataValid(data);
