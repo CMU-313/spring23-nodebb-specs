@@ -129,6 +129,7 @@ module.exports = function (User) {
             ['username:sorted', `${userData.username.toLowerCase()}:${uid}`],
             ['userslug:uid', userData.userslug],
             ['fullname:uid', userData.fullname],
+            ['accounttype:uid', userData.accounttype],
         ];
         if (userData.email) {
             bulkRemove.push(['email:uid', userData.email.toLowerCase()]);
