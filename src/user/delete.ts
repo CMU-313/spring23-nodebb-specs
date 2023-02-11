@@ -1,20 +1,18 @@
-'use strict';
-
-const async = require('async');
-const _ = require('lodash');
-const path = require('path');
-const nconf = require('nconf');
-const util = require('util');
-const rimrafAsync = util.promisify(require('rimraf'));
+import async = require('async');
+import _ = require('lodash');
+import path = require('path');
+import nconf = require('nconf');
+import util = require('util');
+import rimrafAsync = util.promisify(require('rimraf'));
 
 const db = require('../database');
-const posts = require('../posts');
-const flags = require('../flags');
-const topics = require('../topics');
-const groups = require('../groups');
-const messaging = require('../messaging');
-const plugins = require('../plugins');
-const batch = require('../batch');
+import posts = require('../posts');
+import flags = require('../flags');
+import topics = require('../topics');
+import groups = require('../groups');
+import messaging = require('../messaging');
+import plugins = require('../plugins');
+import batch = require('../batch');
 
 module.exports = function (User) {
     const deletesInProgress = {};
