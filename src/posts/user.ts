@@ -40,7 +40,7 @@ type UserData = {
     banned_until: number,
     banned_until_readable: string,
     muted: boolean,
-    selectedGroups: number[],
+    selectedGroups: GroupData[],
     custom_profile_info: any
 }
 
@@ -61,6 +61,45 @@ type UserDataResults = {
     uids: string[],
 }
 
+type UserSettings = {
+    uid: number,
+    showemail: boolean,
+    showfullname: boolean,
+    openOutgoingLinksInNewTab: boolean,
+    dailyDigestFreq: string,
+    usePagination: boolean,
+    topicsPerPage: number,
+    postsPerPage: number,
+    userLang: string,
+    acpLang: string,
+    topicPostSort: string,
+    categoryTopicSort: string,
+    followTopicsOnCreate: boolean,
+    followTopicsOnReply: boolean,
+    upvoteNotifFreq: string,
+    restrictChat: boolean,
+    topicSearchEnabled: boolean,
+    updateUrlWithPostIndex: boolean,
+    bootswatchSkin: string,
+    homePageRoute: string,
+    scrollToMyPost: boolean,
+    categoryWatchState: string,
+    notificationType_upvote: string,
+    'notificationType_new-topic': string,
+    'notificationType_new-reply': string,
+    'notificationType_post-edit': string,
+    notificationType_follow: string,
+    'notificationType_new-chat': string,
+    'notificationType_new-group-chat': string,
+    'notificationType_group-invite': string,
+    'notificationType_group-leave': string,
+    'notificationType_group-request-membership': string,
+    'notificationType_new-register': string,
+    'notificationType_post-queue': string,
+    'notificationType_new-post-flag': string,
+    'notificationType_new-user-flag': string,
+}
+
 module.exports = function (Posts) {
     async function getUserData(uids: string[], uid: string): Promise<UserData[]> {
         const fields = [
@@ -79,78 +118,12 @@ module.exports = function (Posts) {
         return await user.getUsersFields(result.uids, _.uniq(result.fields)) as UserData[];
     }
 
-    Posts.getUserInfoForPosts = async function (uids: string[], uid: string): Promise<void> {
-        const [userData, userSettings, signatureUids]: [UserData[], any, string[]] = await Promise.all([
-            getUserData(uids, uid),
-            user.getMultipleUserSettings(uids),
-            privileges.global.filterUids('signature', uids),
-        ]);
-        console.log(userSettings);
-        const uidsSignatureSet: Set<number> = new Set(signatureUids.map(uid => parseInt(uid, 10)));
-        const groupsMap: Map<string, GroupData> = await getGroupsMap(userData);
-        userData.forEach((userData, index) => {
-            userData.signature = validator.escape(String(userData.signature || ''));
-            userData.fullname = userSettings[index].showfullname ? validator.escape(String(userData.fullname || '')) : undefined;
-            userData.selectedGroups = [];
-
-            if (meta.config.hideFullname) {
-                userData.fullname = undefined;
-            }
-        });
-
-        const result = await Promise.all(userData.map(async (userData) => {
-            const [isMemberOfGroups, signature, customProfileInfo]: [boolean, string, any] = await Promise.all([
-                checkGroupMembership(userData.uid, userData.groupTitleArray),
-                parseSignature(userData, uid, uidsSignatureSet),
-                plugins.hooks.fire('filter:posts.custom_profile_info', { profile: [], uid: userData.uid }),
-            ]);
-
-            if (isMemberOfGroups && userData.groupTitleArray) {
-                userData.groupTitleArray.forEach((userGroup, index) => {
-                    if (isMemberOfGroups[index] && groupsMap[userGroup]) {
-                        userData.selectedGroups.push(groupsMap[userGroup]);
-                    }
-                });
-            }
-            userData.signature = signature;
-            userData.custom_profile_info = customProfileInfo.profile;
-
-            return await plugins.hooks.fire('filter:posts.modifyUserInfo', userData);
-        }));
-        const hookResult = await plugins.hooks.fire('filter:posts.getUserInfoForPosts', { users: result });
-        // console.log('pee'+ hookResult.users);
-        return hookResult.users;
-    };
-
-    Posts.overrideGuestHandle = function (postData, handle) {
-        if (meta.config.allowGuestHandles && postData && postData.user && parseInt(postData.uid, 10) === 0 && handle) {
-            postData.user.username = validator.escape(String(handle));
-            if (postData.user.hasOwnProperty('fullname')) {
-                postData.user.fullname = postData.user.username;
-            }
-            postData.user.displayname = postData.user.username;
-        }
-    };
-
-    async function checkGroupMembership(uid, groupTitleArray) {
-        if (!Array.isArray(groupTitleArray) || !groupTitleArray.length) {
-            return null;
-        }
-        return await groups.isMemberOfGroups(uid, groupTitleArray);
-    }
-
-    async function parseSignature(userData, uid: string, signatureUids: Set<number>): Promise<string> {
-    if (!userData.signature || !signatureUids.has(userData.uid) || meta.config.disableSignatures) {
-            return '';
-        }
-        const result = await Posts.parseSignature(userData, uid);
-        return result.userData.signature;
-    }
-
-    async function getGroupsMap(userData): Promise<Map<string, GroupData>> {
+    async function getGroupsMap(userData: UserData[]): Promise<Map<string, GroupData>> {
         const groupTitles: string[] = _.uniq(_.flatten(userData.map(u => u && u.groupTitleArray)));
-        const groupsMap: Map<string, GroupData> = new Map<string, GroupData>;
-        const groupsData: GroupData[] = await groups.getGroupsData(groupTitles);
+        const groupsMap: Map<string, GroupData> = new Map<string, GroupData>();
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        const groupsData: GroupData[] = await groups.getGroupsData(groupTitles) as GroupData[];
         groupsData.forEach((group) => {
             if (group && group.userTitleEnabled && !group.hidden) {
                 groupsMap[group.name] = {
@@ -166,6 +139,107 @@ module.exports = function (Posts) {
         return groupsMap;
     }
 
+    async function checkGroupMembership(uid, groupTitleArray): Promise<boolean[]> {
+        if (!Array.isArray(groupTitleArray) || !groupTitleArray.length) {
+            return null;
+        }
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        return await groups.isMemberOfGroups(uid, groupTitleArray) as boolean[];
+    }
+
+    async function parseSignature(userData: UserData, uid: string, signatureUids: Set<number>): Promise<string> {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        if (!userData.signature || !signatureUids.has(userData.uid) || meta.config.disableSignatures) {
+            return '';
+        }
+        type ParseResult = {
+            userData: UserData,
+        }
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const result: ParseResult = await Posts.parseSignature(userData, uid) as ParseResult;
+        return result.userData.signature;
+    }
+
+    Posts.getUserInfoForPosts = async function (uids: string[], uid: string): Promise<UserData[]> {
+        const [userData, userSettings, signatureUids]: [UserData[], UserSettings[], string[]] = await Promise.all([
+            getUserData(uids, uid),
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+            user.getMultipleUserSettings(uids) as UserSettings[],
+            privileges.global.filterUids('signature', uids) as string[],
+        ]);
+        const uidsSignatureSet: Set<number> = new Set(signatureUids.map(uid => parseInt(uid, 10)));
+        const groupsMap: Map<string, GroupData> = await getGroupsMap(userData);
+        userData.forEach((userData, index) => {
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            userData.signature = validator.escape(String(userData.signature || '')) as string;
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            userData.fullname = userSettings[index].showfullname ? validator.escape(String(userData.fullname || '')) as string : undefined;
+            userData.selectedGroups = [];
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            if (meta.config.hideFullname) {
+                userData.fullname = undefined;
+            }
+        });
+
+        type CustomProfileInfo = {
+            uid: number,
+            profile: string[]
+        }
+        // type Profile
+        const result: UserData[] = await Promise.all(userData.map(async (userData) => {
+            const [isMemberOfGroups, signature, customProfileInfo]: [boolean[], string, CustomProfileInfo] =
+                await Promise.all([
+                    checkGroupMembership(userData.uid, userData.groupTitleArray),
+                    parseSignature(userData, uid, uidsSignatureSet),
+                    plugins.hooks.fire('filter:posts.custom_profile_info', {
+                        profile: [], uid: userData.uid,
+                    }) as CustomProfileInfo,
+                ]);
+            if (isMemberOfGroups && userData.groupTitleArray) {
+                userData.groupTitleArray.forEach((userGroup, index) => {
+                    if (isMemberOfGroups[index] && groupsMap[userGroup]) {
+                        // The next line calls a function in a module that has not been updated to TS yet
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                        userData.selectedGroups.push(groupsMap[userGroup]);
+                    }
+                });
+            }
+            userData.signature = signature;
+            userData.custom_profile_info = customProfileInfo.profile;
+            return await plugins.hooks.fire('filter:posts.modifyUserInfo', userData) as UserData;
+        }));
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const hookResult: {users: UserData[]} = await plugins.hooks.fire('filter:posts.getUserInfoForPosts', { users: result });
+        return hookResult.users;
+    };
+    
+    type PostData = {
+        uid: string,
+        user: UserData,
+    }
+    Posts.overrideGuestHandle = function (postData: PostData, handle: string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        if (meta.config.allowGuestHandles && postData && postData.user && parseInt(postData.uid, 10) === 0 && handle) {
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            postData.user.username = validator.escape(String(handle)) as string;
+            if (postData.user.hasOwnProperty('fullname')) {
+                postData.user.fullname = postData.user.username;
+            }
+            postData.user.displayname = postData.user.username;
+        }
+    };
+
+
     Posts.isOwner = async function (pids, uid) {
         uid = parseInt(uid, 10);
         const isArray = Array.isArray(pids);
@@ -177,6 +251,7 @@ module.exports = function (Posts) {
         const result = postData.map(post => post && post.uid === uid);
         return isArray ? result : result[0];
     };
+    
 
     Posts.isModerator = async function (pids, uid: string): Promise<boolean> {
         if (parseInt(uid, 10) <= 0) {
