@@ -44,7 +44,7 @@ module.exports = function (Topics) {
         topicData = result.topic;
         await db.setObject(`topic:${topicData.tid}`, topicData);
         await db.setObject(`topic:${topicData.tid}`, topicData);
-        await db.setObjectField(`topic:${topicData.tid}`, "resolved", false);
+        await db.setObjectField(`topic:${topicData.tid}`, 'resolved', false);
 
         const timestampedSortedSetKeys = [
             'topics:tid',
@@ -210,7 +210,6 @@ module.exports = function (Topics) {
         topicData.resolved = true;
         await db.setObjectField(`topic:${topicData.tid}`, 'resolved', true);
         // await db.setObject(`topic:${topicData.tid}`, topicData);
-        
         analytics.increment(['posts', `posts:byCid:${data.cid}`]);
         plugins.hooks.fire('action:topic.reply', { post: _.clone(postData), data: data });
 
