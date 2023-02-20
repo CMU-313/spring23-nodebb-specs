@@ -43,6 +43,8 @@ module.exports = function (Topics) {
         const result = await plugins.hooks.fire('filter:topic.create', { topic: topicData, data: data });
         topicData = result.topic;
         await db.setObject(`topic:${topicData.tid}`, topicData);
+        await db.setObject(`topic:${topicData.tid}`, topicData);
+        await db.setObjectField(`topic:${topicData.tid}`, "resolved", false);
 
         const timestampedSortedSetKeys = [
             'topics:tid',
@@ -138,6 +140,7 @@ module.exports = function (Topics) {
         topicData.mainPost = postData;
         topicData.index = 0;
         postData.index = 0;
+        topicData.unreplied = true;
 
         if (topicData.scheduled) {
             await Topics.delete(tid);
@@ -204,7 +207,10 @@ module.exports = function (Topics) {
                 mergeId: `notifications:user_posted_to|${postData.topic.tid}`,
             });
         }
-
+        // 313: sets resolved to true when it a reply happens
+        topicData.resolved = true;
+        await db.setObject(`topic:${topicData.tid}`, topicData);
+        
         analytics.increment(['posts', `posts:byCid:${data.cid}`]);
         plugins.hooks.fire('action:topic.reply', { post: _.clone(postData), data: data });
 
@@ -242,7 +248,6 @@ module.exports = function (Topics) {
         postData.selfPost = false;
         postData.timestampISO = utils.toISOString(postData.timestamp);
         postData.topic.title = String(postData.topic.title);
-
         return postData;
     }
 

@@ -3,6 +3,15 @@
     {{widgets.header.html}}
     {{{end}}}
 </div>
+
+<!-- IF !frontEndResolved -->this post is unresolved<!-- ELSE -->this post is resolved<!-- ENDIF !frontEndResolved -->
+
+<label for="resolvedSwitch">
+  <input type="checkbox" id="switch1">
+  <span>Resolved?</span>
+</label>
+
+{{{ if !(resolved==='false') }}}unpee{{{ end }}}{{{ if resolved }}}pee!{{{ end }}}
 <div class="row">
     <div class="topic <!-- IF widgets.sidebar.length -->col-lg-9 col-sm-12<!-- ELSE -->col-lg-12<!-- ENDIF widgets.sidebar.length -->">
         <div class="topic-header">

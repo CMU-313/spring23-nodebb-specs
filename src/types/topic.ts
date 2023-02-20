@@ -17,6 +17,7 @@ export type TopicObjectCoreProperties = {
   bookmark: number;
   unreplied: boolean;
   icons: string[];
+  resolved: boolean;
 };
 
 export type TopicObjectOptionalProperties = {
@@ -67,6 +68,7 @@ export type TopicSlimProperties = {
   votes: string;
   teaserPid: number | string;
   thumbs: Thumb[];
+  resolved: boolean;
 };
 
 export type Thumb = {
