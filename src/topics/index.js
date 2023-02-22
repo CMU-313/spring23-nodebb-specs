@@ -167,6 +167,7 @@ Topics.getTopicWithPosts = async function (topicData, set, uid, start, stop, rev
         related,
         thumbs,
         events,
+        frontEndResolved,
     ] = await Promise.all([
         Topics.getTopicPosts(topicData, set, start, stop, uid, reverse),
         categories.getCategoryData(topicData.cid),
@@ -180,6 +181,8 @@ Topics.getTopicWithPosts = async function (topicData, set, uid, start, stop, rev
         Topics.getRelatedTopics(topicData, uid),
         Topics.thumbs.load([topicData]),
         Topics.events.get(topicData.tid, uid, reverse),
+        // 313: added new frontEndResolved field for the frontend vars
+        db.getObjectField(`topic:${topicData.tid}`, 'resolved'),
     ]);
 
     topicData.thumbs = thumbs[0];
@@ -202,6 +205,9 @@ Topics.getTopicWithPosts = async function (topicData, set, uid, start, stop, rev
     topicData.bookmark = bookmark;
     topicData.postSharing = postSharing;
     topicData.deleter = deleter;
+    // 313:
+    // it gets it from Topic as a string, converts to boolean
+    topicData.frontEndResolved = frontEndResolved === 'true';
     if (deleter) {
         topicData.deletedTimestampISO = utils.toISOString(topicData.deletedTimestamp);
     }
