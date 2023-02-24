@@ -125,4 +125,8 @@ SocketTopics.getPostCountInTopic = async function (socket, tid) {
     return await db.sortedSetScore(`tid:${tid}:posters`, socket.uid);
 };
 
+SocketTopics.setResolved = async function (socket, data) {
+    await topics.setResolved(data.tid);
+};
+
 require('../promisify')(SocketTopics);

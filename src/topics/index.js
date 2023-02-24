@@ -33,6 +33,8 @@ require('./tools')(Topics);
 Topics.thumbs = require('./thumbs');
 require('./bookmarks')(Topics);
 require('./merge')(Topics);
+// 313: added resolved into Topics
+require('./resolved')(Topics);
 Topics.events = require('./events');
 
 Topics.exists = async function (tids) {
