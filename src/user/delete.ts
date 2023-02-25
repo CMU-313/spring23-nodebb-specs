@@ -3,9 +3,9 @@ import _ = require('lodash');
 import path = require('path');
 import nconf = require('nconf');
 import util = require('util');
-import rimrafAsync = util.promisify(require('rimraf'));
+import rimraf = require('rimraf');
 
-const db = require('../database');
+import db = require('../database');
 import posts = require('../posts');
 import flags = require('../flags');
 import topics = require('../topics');
@@ -14,13 +14,71 @@ import messaging = require('../messaging');
 import plugins = require('../plugins');
 import batch = require('../batch');
 
-module.exports = function (User) {
+interface deleting {
+    delete?: (callerUid: string, uid: string) =>
+Promise<void>;
+    deleteContent?: (arg0: string, arg1: string) =>
+Promise<void>;
+    deleteAccount?: (arg0: string) =>
+Promise<void>;
+    deleteUpload?: (arg0: string, arg1: string, arg2: Array<string>) =>
+Promise<void>;
+    auth: {
+        revokeAllSessions?: (arg0: string) => Promise<void>;
+    };
+    reset: {
+        cleanByUid?: (arg0: string) => Promise<void>;
+    }
+}
+
+const rimrafAsync = util.promisify(rimraf as (path: string, callback:
+    (error: Error) => void) => void) as (path: string) => Promise<void>;
+
+module.exports = function (User : deleting) {
     const deletesInProgress = {};
 
     User.delete = async (callerUid, uid) => {
         await User.deleteContent(callerUid, uid);
         return await User.deleteAccount(uid);
     };
+
+    async function deletePosts(callerUid : string, uid : string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await batch.processSortedSet(`uid:${uid}:posts`, async (pids: string) => { await posts.purge(pids, callerUid); }, { alwaysStartAt: 0, batch: 500 });
+    }
+
+
+    async function deleteTopicsHelper(tid : string, callerUid : string) {
+        await topics.purge(tid, callerUid);
+    }
+
+    async function deleteTopics(callerUid : string, uid : string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await batch.processSortedSet(`uid:${uid}:topics`, async (ids : string[]) => {
+            const promises = [];
+            for (const tid of ids) {
+                promises.push(deleteTopicsHelper(tid, callerUid));
+            }
+            await Promise.all(promises);
+        }, { alwaysStartAt: 0 });
+    }
+    async function deleteUploads(callerUid: string, uid: string) {
+        const uploads = await db.getSortedSetMembers(`uid:${uid}:uploads`);
+        await User.deleteUpload(callerUid, uid, uploads);
+    }
+
+    async function deleteQueued(uid: string) {
+        let deleteIds = [];
+        await batch.processSortedSet('post:queue', async (ids: any[]) => {
+            const data = await db.getObjects(ids.map((id: any) => `post:queue:${id}`));
+            const userQueuedIds = data.filter((d: { uid: string; }) => parseInt(d.uid, 10) === parseInt(uid, 10)).map((d: { id: any; }) => d.id);
+            deleteIds = deleteIds.concat(userQueuedIds);
+        }, { batch: 500 });
+        await async.eachSeries(deleteIds, posts.removeFromQueue);
+    }
+
 
     User.deleteContent = async function (callerUid, uid) {
         if (parseInt(uid, 10) <= 0) {
@@ -37,36 +95,8 @@ module.exports = function (User) {
         delete deletesInProgress[uid];
     };
 
-    async function deletePosts(callerUid, uid) {
-        await batch.processSortedSet(`uid:${uid}:posts`, async (pids) => {
-            await posts.purge(pids, callerUid);
-        }, { alwaysStartAt: 0, batch: 500 });
-    }
 
-    async function deleteTopics(callerUid, uid) {
-        await batch.processSortedSet(`uid:${uid}:topics`, async (ids) => {
-            await async.eachSeries(ids, async (tid) => {
-                await topics.purge(tid, callerUid);
-            });
-        }, { alwaysStartAt: 0 });
-    }
-
-    async function deleteUploads(callerUid, uid) {
-        const uploads = await db.getSortedSetMembers(`uid:${uid}:uploads`);
-        await User.deleteUpload(callerUid, uid, uploads);
-    }
-
-    async function deleteQueued(uid) {
-        let deleteIds = [];
-        await batch.processSortedSet('post:queue', async (ids) => {
-            const data = await db.getObjects(ids.map(id => `post:queue:${id}`));
-            const userQueuedIds = data.filter(d => parseInt(d.uid, 10) === parseInt(uid, 10)).map(d => d.id);
-            deleteIds = deleteIds.concat(userQueuedIds);
-        }, { batch: 500 });
-        await async.eachSeries(deleteIds, posts.removeFromQueue);
-    }
-
-    async function removeFromSortedSets(uid) {
+    async function removeFromSortedSets(uid: string) {
         await db.sortedSetsRemove([
             'users:joindate',
             'users:postcount',
@@ -154,7 +184,7 @@ module.exports = function (User) {
         return userData;
     };
 
-    async function deleteVotes(uid) {
+    async function deleteVotes(uid: string) {
         const [upvotedPids, downvotedPids] = await Promise.all([
             db.getSortedSetRange(`uid:${uid}:upvote`, 0, -1),
             db.getSortedSetRange(`uid:${uid}:downvote`, 0, -1),
@@ -165,9 +195,9 @@ module.exports = function (User) {
         });
     }
 
-    async function deleteChats(uid) {
+    async function deleteChats(uid: string) {
         const roomIds = await db.getSortedSetRange(`uid:${uid}:chat:rooms`, 0, -1);
-        const userKeys = roomIds.map(roomId => `uid:${uid}:chat:room:${roomId}:mids`);
+        const userKeys = roomIds.map((roomId: any) => `uid:${uid}:chat:room:${roomId}:mids`);
 
         await Promise.all([
             messaging.leaveRooms(uid, roomIds),
@@ -175,19 +205,19 @@ module.exports = function (User) {
         ]);
     }
 
-    async function deleteUserIps(uid) {
+    async function deleteUserIps(uid: string) {
         const ips = await db.getSortedSetRange(`uid:${uid}:ip`, 0, -1);
-        await db.sortedSetsRemove(ips.map(ip => `ip:${ip}:uid`), uid);
+        await db.sortedSetsRemove(ips.map((ip: any) => `ip:${ip}:uid`), uid);
         await db.delete(`uid:${uid}:ip`);
     }
 
-    async function deleteUserFromFollowers(uid) {
+    async function deleteUserFromFollowers(uid: string) {
         const [followers, following] = await Promise.all([
             db.getSortedSetRange(`followers:${uid}`, 0, -1),
             db.getSortedSetRange(`following:${uid}`, 0, -1),
         ]);
 
-        async function updateCount(uids, name, fieldName) {
+        async function updateCount(uids: async.IterableCollection<unknown>, name: string, fieldName: string) {
             await async.each(uids, async (uid) => {
                 let count = await db.sortedSetCard(name + uid);
                 count = parseInt(count, 10) || 0;
@@ -195,8 +225,8 @@ module.exports = function (User) {
             });
         }
 
-        const followingSets = followers.map(uid => `following:${uid}`);
-        const followerSets = following.map(uid => `followers:${uid}`);
+        const followingSets = followers.map((uid: any) => `following:${uid}`);
+        const followerSets = following.map((uid: any) => `followers:${uid}`);
 
         await Promise.all([
             db.sortedSetsRemove(followerSets.concat(followingSets), uid),
@@ -205,7 +235,7 @@ module.exports = function (User) {
         ]);
     }
 
-    async function deleteImages(uid) {
+    async function deleteImages(uid: string) {
         const folder = path.join(nconf.get('upload_path'), 'profile');
         await Promise.all([
             rimrafAsync(path.join(folder, `${uid}-profilecover*`)),
