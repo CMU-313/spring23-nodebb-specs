@@ -4,7 +4,7 @@
     {{{end}}}
 </div>
 
-<!-- IF !frontEndResolved -->this post is unresolved<!-- ELSE -->this post is resolved<!-- ENDIF !frontEndResolved -->
+
 
 <div class="row">
     <div class="topic <!-- IF widgets.sidebar.length -->col-lg-9 col-sm-12<!-- ELSE -->col-lg-12<!-- ENDIF widgets.sidebar.length -->">
@@ -44,9 +44,17 @@
                 <!-- IMPORT partials/topic/browsing-users.tpl -->
                 </div>
                 {{{ end }}}
-
                 <!-- IMPORT partials/post_bar.tpl -->
             </div>
+            <!-- IF !loggedIn -->This post is resolved.
+            <!-- ELSE -->
+            <div class="resolved">
+                <label class="mdl-switch mdl-js-switch mdl-js-ripple-effect" for="switch-2">
+                    <input component = "topic/resolved" type="checkbox" id="switch-2" class="mdl-switch__input" <!-- IF frontEndResolved -->checked<!-- ENDIF !frontEndResolved -->>
+                    <span class="mdl-switch__label">Resolved?</span>
+                </label>
+            </div>
+            <!-- ENDIF !loggedIn -->
         </div>
         <!-- IF merger -->
         <div component="topic/merged/message" class="alert alert-warning clearfix">

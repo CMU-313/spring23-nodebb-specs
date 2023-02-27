@@ -64,7 +64,7 @@ define('forum/topic', [
         addPostsPreviewHandler();
 
         handleBookmark(tid);
-
+        addResolved();
         $(window).on('scroll', utils.debounce(updateTopicTitle, 250));
 
         handleTopicSearch();
@@ -178,6 +178,12 @@ define('forum/topic', [
                 navigator.scrollToIndex(toPost.attr('data-index'), true);
                 return false;
             }
+        });
+    }
+
+    function addResolved() {
+        components.get('topic/resolved').on('click', function () {
+            socket.emit('topics.setResolved', { tid: tid });
         });
     }
 
