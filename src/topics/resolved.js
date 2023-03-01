@@ -13,6 +13,8 @@ module.exports = function (Topics) {
     Topics.setResolved = function (tid) {
         return __awaiter(this, void 0, void 0, function* () {
             let resolved;
+            // 313: These type checks are done because redis saves the object field as a string
+            // vs everything else saves it as a boolean.
             // The next lines calls a function in a module that has not been updated to TS yet
             /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
             if (typeof (yield db.getObjectField(`topic:${tid}`, 'resolved')) === 'string') {
