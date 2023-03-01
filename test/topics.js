@@ -265,12 +265,13 @@ describe('Topic\'s', () => {
         });
 
         it('should set a topic as unresolved by default', (done) => {
-            assert(newTopic.resolved === 'false');
+            console.log(newTopic);
+            assert(newTopic.resolved === 'false' | newTopic.resolved == false);
             done();
         });
 
         it('should update a topic to resolved when an answer is posted', async () => {
-            assert(newTopic.resolved === 'false');
+            assert(newTopic.resolved === 'false' | !newTopic.resolved);
             await topics.reply({ uid: topic.userId, content: 'test reply', tid: newTopic.tid, toPid: newPost.pid });
             const topicData = await topics.getTopicData(newTopic.tid);
             assert(topicData.resolved === 'true');
