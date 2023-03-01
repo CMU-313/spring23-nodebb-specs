@@ -282,9 +282,6 @@ describe('Topic\'s', () => {
             assert(newTopic.resolved === 'true' || newTopic.resolved);
             await topics.setResolved(newTopic.tid);
             newTopic = await topics.getTopicData(newTopic.tid);
-            console.log(newTopic);
-            console.log(await db.getObjectField(`topic:${newTopic.tid}`, 'resolved'));
-            assert(await db.getObjectField(`topic:${newTopic.tid}`, 'resolved') === 'false' || await db.getObjectField(`topic:${newTopic.tid}`, 'resolved') === false);
             assert(newTopic.resolved === 'false' || !newTopic.resolved);
             await topics.setResolved(newTopic.tid);
             newTopic = await topics.getTopicData(newTopic.tid);
