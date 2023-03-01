@@ -274,8 +274,8 @@ describe('Topic\'s', () => {
         it('should update a topic to resolved when an answer is posted', async () => {
             assert(newTopic.resolved === 'false' || !newTopic.resolved);
             await topics.reply({ uid: topic.userId, content: 'test reply', tid: newTopic.tid, toPid: newPost.pid });
-            const topicData = await topics.getTopicData(newTopic.tid);
-            assert(topicData.resolved === 'true' || newTopic.resolved);
+            const newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved === 'true' || newTopic.resolved);
         });
 
         it('should update a topic to resolved when an answer is posted', async () => {
