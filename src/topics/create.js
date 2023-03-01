@@ -209,7 +209,6 @@ module.exports = function (Topics) {
         // 313: sets resolved to true when it a reply happens
         topicData.resolved = true;
         await db.setObjectField(`topic:${topicData.tid}`, 'resolved', true);
-        // await db.setObject(`topic:${topicData.tid}`, topicData);
         analytics.increment(['posts', `posts:byCid:${data.cid}`]);
         plugins.hooks.fire('action:topic.reply', { post: _.clone(postData), data: data });
 
