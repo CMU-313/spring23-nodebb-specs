@@ -244,6 +244,66 @@ describe('Topic\'s', () => {
         });
     });
 
+    describe('Resolved Methods', () => {
+        let newTopic;
+        let newPost;
+        before((done) => {
+            topics.post({
+                uid: topic.userId,
+                title: topic.title,
+                content: topic.content,
+                cid: topic.categoryId,
+            }, (err, result) => {
+                if (err) {
+                    return done(err);
+                }
+
+                newTopic = result.topicData;
+                newPost = result.postData;
+                done();
+            });
+        });
+
+        it('should set a topic as unresolved by default', (done) => {
+            assert(newTopic.resolved === 'false');
+            done();
+        });
+
+        it('should update a topic to resolved when an answer is posted', async () => {
+            assert(newTopic.resolved === 'false');
+            await topics.reply({ uid: topic.userId, content: 'test reply', tid: newTopic.tid, toPid: newPost.pid });
+            const topicData = await topics.getTopicData(newTopic.tid);
+            assert(topicData.resolved ==='true');
+        });
+
+        it('should update a topic to resolved when an answer is posted', async () => {
+            assert(newTopic.resolved === 'false');
+            await topics.reply({ uid: topic.userId, content: 'test reply', tid: newTopic.tid, toPid: newPost.pid });
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved ==='true');
+        });
+
+        it('should change resolved status when setResolved is called', async () => {
+            assert(newTopic.resolved === 'true');
+            await topics.setResolved(newTopic.tid)
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved ==='false');
+            await topics.setResolved(newTopic.tid)
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved ==='true');
+        });
+
+        it('should change resolved status when socket API is called', async () => {
+            assert(newTopic.resolved === 'true');
+            await socketTopics.setResolved( { uid: adminUid }, {tid: newTopic.tid });
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved ==='false');
+            await socketTopics.setResolved( { uid: adminUid }, {tid: newTopic.tid });
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved ==='true');
+        });
+    });
+
     describe('.reply', () => {
         let newTopic;
         let newPost;
