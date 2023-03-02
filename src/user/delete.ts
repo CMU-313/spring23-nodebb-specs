@@ -14,15 +14,30 @@ import messaging = require('../messaging');
 import plugins = require('../plugins');
 import batch = require('../batch');
 
+type UserData = {
+    username: string,
+    userslug: string,
+    accounttype: string,
+    email: string,
+    joindate: number,
+    lastonline: number,
+    status: string,
+    gdpr_consent?: boolean,
+    acceptTos: number,
+    uid: number,
+    fullname: string,
+    password: string,
+}
+
 interface deleting {
     delete?: (callerUid: string, uid: string) =>
-Promise<void>;
+Promise<UserData>;
     deleteContent?: (arg0: string, arg1: string) =>
 Promise<void>;
     deleteAccount?: (arg0: string) =>
-Promise<void>;
+Promise<UserData>;
     deleteUpload?: (arg0: string, arg1: string, arg2: Array<string>) =>
-Promise<void>;
+Promise<UserData>;
     auth: {
         revokeAllSessions?: (arg0: string) => Promise<void>;
     };
@@ -30,6 +45,9 @@ Promise<void>;
         cleanByUid?: (arg0: string) => Promise<void>;
     }
 }
+
+
+
 
 const rimrafAsync = util.promisify(rimraf as (path: string, callback:
     (error: Error) => void) => void) as (path: string) => Promise<void>;
@@ -50,6 +68,8 @@ module.exports = function (User : deleting) {
 
 
     async function deleteTopicsHelper(tid : string, callerUid : string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await topics.purge(tid, callerUid);
     }
 
@@ -65,18 +85,32 @@ module.exports = function (User : deleting) {
         }, { alwaysStartAt: 0 });
     }
     async function deleteUploads(callerUid: string, uid: string) {
-        const uploads = await db.getSortedSetMembers(`uid:${uid}:uploads`);
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const uploads: string[] = await db.getSortedSetMembers(`uid:${uid}:uploads`) as string[];
         await User.deleteUpload(callerUid, uid, uploads);
     }
 
+    async function deleteQueuedHelper(id : string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await posts.removeFromQueue(id);
+    }
+
     async function deleteQueued(uid: string) {
-        let deleteIds = [];
-        await batch.processSortedSet('post:queue', async (ids: any[]) => {
-            const data = await db.getObjects(ids.map((id: any) => `post:queue:${id}`));
-            const userQueuedIds = data.filter((d: { uid: string; }) => parseInt(d.uid, 10) === parseInt(uid, 10)).map((d: { id: any; }) => d.id);
-            deleteIds = deleteIds.concat(userQueuedIds);
+        const deleteIds: string[] = [];
+        await batch.processSortedSet('post:queue', async (ids: string[]) => {
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            const data: Record<string, string>[] = await db.getObjects(ids.map((id: string) => `post:queue:${id}`)) as Record<string, string>[];
+            const userQueuedIds = data.filter((d: { uid: string; }) => parseInt(d.uid, 10) === parseInt(uid, 10)).map((d: { id: string; }) => d.id);
+            deleteIds.concat(userQueuedIds);
         }, { batch: 500 });
-        await async.eachSeries(deleteIds, posts.removeFromQueue);
+        const promises = [];
+        for (const id of deleteIds) {
+            promises.push(deleteQueuedHelper(id));
+        }
+        await Promise.all(promises);
     }
 
 
@@ -94,9 +128,9 @@ module.exports = function (User : deleting) {
         await deleteQueued(uid);
         delete deletesInProgress[uid];
     };
-
-
     async function removeFromSortedSets(uid: string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await db.sortedSetsRemove([
             'users:joindate',
             'users:postcount',
@@ -112,6 +146,41 @@ module.exports = function (User : deleting) {
         ], uid);
     }
 
+    async function deleteVotesHelper(pid: string, uid: string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await posts.unvote(pid, uid);
+    }
+    async function deleteVotes(uid: string) {
+        const [upvotedPids, downvotedPids]: [string[], string[]] = await Promise.all([
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            db.getSortedSetRange(`uid:${uid}:upvote`, 0, -1) as Promise<[string]>,
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            db.getSortedSetRange(`uid:${uid}:downvote`, 0, -1) as Promise<[string]>,
+        ]);
+        const pids = _.uniq(upvotedPids.concat(downvotedPids).filter(Boolean));
+
+        const promises = [];
+        for (const pid of pids) {
+            promises.push(deleteVotesHelper(pid, uid));
+        }
+    }
+
+    async function deleteChats(uid: string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const roomIds: string[] = await db.getSortedSetRange(`uid:${uid}:chat:rooms`, 0, -1) as string[];
+        const userKeys: string[] = roomIds.map((roomId: string) => `uid:${uid}:chat:room:${roomId}:mids`);
+
+        await Promise.all([
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            messaging.leaveRooms(uid, roomIds), db.deleteAll(userKeys),
+        ]);
+    }
+
     User.deleteAccount = async function (uid) {
         if (deletesInProgress[uid] === 'user.deleteAccount') {
             throw new Error('[[error:already-deleting]]');
@@ -119,7 +188,9 @@ module.exports = function (User : deleting) {
         deletesInProgress[uid] = 'user.deleteAccount';
 
         await removeFromSortedSets(uid);
-        const userData = await db.getObject(`user:${uid}`);
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const userData : UserData = await db.getObject(`user:${uid}`);
 
         if (!userData || !userData.username) {
             delete deletesInProgress[uid];
@@ -184,26 +255,6 @@ module.exports = function (User : deleting) {
         return userData;
     };
 
-    async function deleteVotes(uid: string) {
-        const [upvotedPids, downvotedPids] = await Promise.all([
-            db.getSortedSetRange(`uid:${uid}:upvote`, 0, -1),
-            db.getSortedSetRange(`uid:${uid}:downvote`, 0, -1),
-        ]);
-        const pids = _.uniq(upvotedPids.concat(downvotedPids).filter(Boolean));
-        await async.eachSeries(pids, async (pid) => {
-            await posts.unvote(pid, uid);
-        });
-    }
-
-    async function deleteChats(uid: string) {
-        const roomIds = await db.getSortedSetRange(`uid:${uid}:chat:rooms`, 0, -1);
-        const userKeys = roomIds.map((roomId: any) => `uid:${uid}:chat:room:${roomId}:mids`);
-
-        await Promise.all([
-            messaging.leaveRooms(uid, roomIds),
-            db.deleteAll(userKeys),
-        ]);
-    }
 
     async function deleteUserIps(uid: string) {
         const ips = await db.getSortedSetRange(`uid:${uid}:ip`, 0, -1);
