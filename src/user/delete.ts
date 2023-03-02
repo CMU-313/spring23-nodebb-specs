@@ -1,4 +1,3 @@
-import async = require('async');
 import _ = require('lodash');
 import path = require('path');
 import nconf = require('nconf');
@@ -103,7 +102,9 @@ module.exports = function (User : deleting) {
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             const data: Record<string, string>[] = await db.getObjects(ids.map((id: string) => `post:queue:${id}`)) as Record<string, string>[];
-            const userQueuedIds = data.filter((d: { uid: string; }) => parseInt(d.uid, 10) === parseInt(uid, 10)).map((d: { id: string; }) => d.id);
+            const userQueuedIds = data.filter(
+                (d: { uid: string; }) => parseInt(d.uid, 10) === parseInt(uid, 10)
+            ).map((d: { id: string; }) => d.id);
             deleteIds.concat(userQueuedIds);
         }, { batch: 500 });
         const promises = [];
@@ -166,6 +167,7 @@ module.exports = function (User : deleting) {
         for (const pid of pids) {
             promises.push(deleteVotesHelper(pid, uid));
         }
+        await Promise.all(promises);
     }
 
     async function deleteChats(uid: string) {
@@ -181,6 +183,67 @@ module.exports = function (User : deleting) {
         ]);
     }
 
+    async function deleteUserIps(uid: string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const ips: string[] = await db.getSortedSetRange(`uid:${uid}:ip`, 0, -1) as string[];
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await db.sortedSetsRemove(ips.map((ip: string) => `ip:${ip}:uid`), uid);
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await db.delete(`uid:${uid}:ip`);
+    }
+
+    async function deleteUserFromFollowers(uid: string) {
+        const [followers, following]: [string[], string[]] = await Promise.all([
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            db.getSortedSetRange(`followers:${uid}`, 0, -1) as Promise<[string]>,
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            db.getSortedSetRange(`following:${uid}`, 0, -1) as Promise<[string]>,
+        ]);
+        async function updateCountHelper(name: string, uid: string, fieldName: string) {
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            // The next line calls a function in a module that has not been updated to TS yet
+            /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+            const count: string = await db.sortedSetCard(name + uid) as string;
+            const count_: number = parseInt(count, 10) || 0;
+            await db.setObjectField(`user:${uid}`, fieldName, count_);
+            /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+        }
+        async function updateCount(uids: string[], name: string, fieldName: string) {
+            const promises = [];
+            for (const uid of uids) {
+                promises.push(updateCountHelper(name, uid, fieldName));
+            }
+            await Promise.all(promises);
+        }
+
+        const followingSets = followers.map((uid: string) => `following:${uid}`);
+        const followerSets = following.map((uid: string) => `followers:${uid}`);
+
+        await Promise.all([
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            db.sortedSetsRemove(followerSets.concat(followingSets), uid),
+            updateCount(following, 'followers:', 'followerCount'),
+            updateCount(followers, 'following:', 'followingCount'),
+        ]);
+    }
+
+    async function deleteImages(uid: string) {
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const folder = path.join(nconf.get('upload_path') as string, 'profile');
+        await Promise.all([
+            rimrafAsync(path.join(folder, `${uid}-profilecover*`)),
+            rimrafAsync(path.join(folder, `${uid}-profileavatar*`)),
+        ]);
+    }
+
     User.deleteAccount = async function (uid) {
         if (deletesInProgress[uid] === 'user.deleteAccount') {
             throw new Error('[[error:already-deleting]]');
@@ -190,7 +253,7 @@ module.exports = function (User : deleting) {
         await removeFromSortedSets(uid);
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const userData : UserData = await db.getObject(`user:${uid}`);
+        const userData : UserData = await db.getObject(`user:${uid}`) as UserData;
 
         if (!userData || !userData.username) {
             delete deletesInProgress[uid];
@@ -239,58 +302,33 @@ module.exports = function (User : deleting) {
         }
 
         await Promise.all([
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             db.sortedSetRemoveBulk(bulkRemove),
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             db.decrObjectField('global', 'userCount'),
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             db.deleteAll(keys),
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             db.setRemove('invitation:uids', uid),
             deleteUserIps(uid),
             deleteUserFromFollowers(uid),
             deleteImages(uid),
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             groups.leaveAllGroups(uid),
+            // The next line calls a function in a module that has not been updated to TS yet
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             flags.resolveFlag('user', uid, uid),
             User.reset.cleanByUid(uid),
         ]);
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await db.deleteAll([`followers:${uid}`, `following:${uid}`, `user:${uid}`]);
         delete deletesInProgress[uid];
         return userData;
     };
-
-
-    async function deleteUserIps(uid: string) {
-        const ips = await db.getSortedSetRange(`uid:${uid}:ip`, 0, -1);
-        await db.sortedSetsRemove(ips.map((ip: any) => `ip:${ip}:uid`), uid);
-        await db.delete(`uid:${uid}:ip`);
-    }
-
-    async function deleteUserFromFollowers(uid: string) {
-        const [followers, following] = await Promise.all([
-            db.getSortedSetRange(`followers:${uid}`, 0, -1),
-            db.getSortedSetRange(`following:${uid}`, 0, -1),
-        ]);
-
-        async function updateCount(uids: async.IterableCollection<unknown>, name: string, fieldName: string) {
-            await async.each(uids, async (uid) => {
-                let count = await db.sortedSetCard(name + uid);
-                count = parseInt(count, 10) || 0;
-                await db.setObjectField(`user:${uid}`, fieldName, count);
-            });
-        }
-
-        const followingSets = followers.map((uid: any) => `following:${uid}`);
-        const followerSets = following.map((uid: any) => `followers:${uid}`);
-
-        await Promise.all([
-            db.sortedSetsRemove(followerSets.concat(followingSets), uid),
-            updateCount(following, 'followers:', 'followerCount'),
-            updateCount(followers, 'following:', 'followingCount'),
-        ]);
-    }
-
-    async function deleteImages(uid: string) {
-        const folder = path.join(nconf.get('upload_path'), 'profile');
-        await Promise.all([
-            rimrafAsync(path.join(folder, `${uid}-profilecover*`)),
-            rimrafAsync(path.join(folder, `${uid}-profileavatar*`)),
-        ]);
-    }
 };
