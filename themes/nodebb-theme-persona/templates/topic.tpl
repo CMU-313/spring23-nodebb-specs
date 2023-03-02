@@ -46,8 +46,9 @@
                 {{{ end }}}
                 <!-- IMPORT partials/post_bar.tpl -->
             </div>
-            <!-- IF !loggedIn -->This post is resolved.
-            <!-- ELSE -->This post is not resolved.
+            <!-- IF !loggedIn --> {{{ if frontEndResolved }}} This post is resolved.{{{ end }}}
+            {{{ if !frontEndResolved }}} This post is unresolved. {{{ end }}}
+            <!-- ELSE -->
             <div class="resolved">
                 <label class="mdl-switch mdl-js-switch mdl-js-ripple-effect" for="switch-2">
                     <input component = "topic/resolved" type="checkbox" id="switch-2" class="mdl-switch__input" <!-- IF frontEndResolved -->checked<!-- ENDIF !frontEndResolved -->>
