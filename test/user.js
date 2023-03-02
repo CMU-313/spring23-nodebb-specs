@@ -184,6 +184,29 @@ describe('User', () => {
             const data = await User.getUserData(uid);
             assert.strictEqual(data.accounttype, 'student');
         });
+
+        it('accounttype should default to student, if not specified', async () => {
+            const inputData = {
+                username: 'itsroro',
+                password: 'hammershark23',
+                email: 'rb@example.com',
+            };
+            const uid = await User.create(inputData);
+            const data = await User.getUserData(uid);
+            assert.strictEqual(data.accounttype, 'student');
+        });
+
+        it('accounttype should store correct field, if specified', async () => {
+            const inputData = {
+                username: 'rb123',
+                password: 'hammershark234',
+                email: 'roba@example.com',
+            };
+            inputData['account-type'] = '     instructor    ';
+            const uid = await User.create(inputData);
+            const data = await User.getUserData(uid);
+            assert.strictEqual(data.accounttype, 'instructor');
+        });
     });
 
     describe('.uniqueUsername()', () => {
