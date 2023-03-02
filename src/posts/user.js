@@ -1,36 +1,88 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const validator = require("validator");
-const _ = require("lodash");
-const db = require("../database");
-const user = require("../user");
-const topics = require("../topics");
-const groups = require("../groups");
-const meta = require("../meta");
-const plugins = require("../plugins");
-const privileges = require("../privileges");
+'use strict';
+
+const async = require('async');
+const validator = require('validator');
+const _ = require('lodash');
+
+const db = require('../database');
+const user = require('../user');
+const topics = require('../topics');
+const groups = require('../groups');
+const meta = require('../meta');
+const plugins = require('../plugins');
+const privileges = require('../privileges');
+
 module.exports = function (Posts) {
-    async function getUserData(uids, uid) {
-        const fields = [
-            'uid', 'username', 'fullname', 'userslug',
-            'reputation', 'postcount', 'topiccount', 'picture',
-            'signature', 'banned', 'banned:expire', 'status',
-            'lastonline', 'groupTitle', 'mutedUntil', 'accounttype',
-        ];
-        const result = await plugins.hooks.fire('filter:posts.addUserFields', {
-            fields: fields,
-            uid: uid,
-            uids: uids,
+    Posts.getUserInfoForPosts = async function (uids, uid) {
+        const [userData, userSettings, signatureUids] = await Promise.all([
+            getUserData(uids, uid),
+            user.getMultipleUserSettings(uids),
+            privileges.global.filterUids('signature', uids),
+        ]);
+        const uidsSignatureSet = new Set(signatureUids.map(uid => parseInt(uid, 10)));
+        const groupsMap = await getGroupsMap(userData);
+
+        userData.forEach((userData, index) => {
+            userData.signature = validator.escape(String(userData.signature || ''));
+            userData.fullname = userSettings[index].showfullname ? validator.escape(String(userData.fullname || '')) : undefined;
+            userData.selectedGroups = [];
+
+            if (meta.config.hideFullname) {
+                userData.fullname = undefined;
+            }
         });
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        return await user.getUsersFields(result.uids, _.uniq(result.fields));
+
+        const result = await Promise.all(userData.map(async (userData) => {
+            const [isMemberOfGroups, signature, customProfileInfo] = await Promise.all([
+                checkGroupMembership(userData.uid, userData.groupTitleArray),
+                parseSignature(userData, uid, uidsSignatureSet),
+                plugins.hooks.fire('filter:posts.custom_profile_info', { profile: [], uid: userData.uid }),
+            ]);
+
+            if (isMemberOfGroups && userData.groupTitleArray) {
+                userData.groupTitleArray.forEach((userGroup, index) => {
+                    if (isMemberOfGroups[index] && groupsMap[userGroup]) {
+                        userData.selectedGroups.push(groupsMap[userGroup]);
+                    }
+                });
+            }
+            userData.signature = signature;
+            userData.custom_profile_info = customProfileInfo.profile;
+
+            return await plugins.hooks.fire('filter:posts.modifyUserInfo', userData);
+        }));
+        const hookResult = await plugins.hooks.fire('filter:posts.getUserInfoForPosts', { users: result });
+        return hookResult.users;
+    };
+
+    Posts.overrideGuestHandle = function (postData, handle) {
+        if (meta.config.allowGuestHandles && postData && postData.user && parseInt(postData.uid, 10) === 0 && handle) {
+            postData.user.username = validator.escape(String(handle));
+            if (postData.user.hasOwnProperty('fullname')) {
+                postData.user.fullname = postData.user.username;
+            }
+            postData.user.displayname = postData.user.username;
+        }
+    };
+
+    async function checkGroupMembership(uid, groupTitleArray) {
+        if (!Array.isArray(groupTitleArray) || !groupTitleArray.length) {
+            return null;
+        }
+        return await groups.isMemberOfGroups(uid, groupTitleArray);
     }
+
+    async function parseSignature(userData, uid, signatureUids) {
+        if (!userData.signature || !signatureUids.has(userData.uid) || meta.config.disableSignatures) {
+            return '';
+        }
+        const result = await Posts.parseSignature(userData, uid);
+        return result.userData.signature;
+    }
+
     async function getGroupsMap(userData) {
         const groupTitles = _.uniq(_.flatten(userData.map(u => u && u.groupTitleArray)));
-        const groupsMap = new Map();
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        const groupsMap = {};
         const groupsData = await groups.getGroupsData(groupTitles);
         groupsData.forEach((group) => {
             if (group && group.userTitleEnabled && !group.hidden) {
@@ -46,270 +98,55 @@ module.exports = function (Posts) {
         });
         return groupsMap;
     }
-    async function checkGroupMembership(uid, groupTitleArray) {
-        if (!Array.isArray(groupTitleArray) || !groupTitleArray.length) {
-            return null;
-        }
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        return await groups.isMemberOfGroups(uid, groupTitleArray);
-    }
-    async function parseSignature(userData, uid, signatureUids) {
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        if (!userData.signature || !signatureUids.has(userData.uid) || meta.config.disableSignatures) {
-            return '';
-        }
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const result = await Posts.parseSignature(userData, uid);
-        return result.userData.signature;
-    }
-    Posts.getUserInfoForPosts = async function (uids, uid) {
-        const [userData, userSettings, signatureUids] = await Promise.all([
-            getUserData(uids, uid),
-            // The next line calls a function in a module that has not been updated to TS yet
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-            user.getMultipleUserSettings(uids),
-            privileges.global.filterUids('signature', uids),
-        ]);
-        const uidsSignatureSet = new Set(signatureUids.map(uid => parseInt(uid, 10)));
-        const groupsMap = await getGroupsMap(userData);
-        userData.forEach((userData, index) => {
-            // The next line calls a function in a module that has not been updated to TS yet
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            userData.signature = validator.escape(String(userData.signature || ''));
-            // The next line calls a function in a module that has not been updated to TS yet
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            userData.fullname = userSettings[index].showfullname ? validator.escape(String(userData.fullname || '')) : undefined;
-            userData.selectedGroups = [];
-            // The next line calls a function in a module that has not been updated to TS yet
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            if (meta.config.hideFullname) {
-                userData.fullname = undefined;
-            }
+
+    async function getUserData(uids, uid) {
+        const fields = [
+            'uid', 'username', 'fullname', 'userslug',
+            'reputation', 'postcount', 'topiccount', 'picture',
+            'signature', 'banned', 'banned:expire', 'status',
+            'lastonline', 'groupTitle', 'mutedUntil', 'accounttype',
+        ];
+        const result = await plugins.hooks.fire('filter:posts.addUserFields', {
+            fields: fields,
+            uid: uid,
+            uids: uids,
         });
-        // type Profile
-        const result = await Promise.all(userData.map(async (userData) => {
-            const [isMemberOfGroups, signature, customProfileInfo] = await Promise.all([
-                checkGroupMembership(userData.uid, userData.groupTitleArray),
-                parseSignature(userData, uid, uidsSignatureSet),
-                plugins.hooks.fire('filter:posts.custom_profile_info', {
-                    profile: [], uid: userData.uid,
-                }),
-            ]);
-            if (isMemberOfGroups && userData.groupTitleArray) {
-                userData.groupTitleArray.forEach((userGroup, index) => {
-                    if (isMemberOfGroups[index] && groupsMap[userGroup]) {
-                        // The next line calls a function in a module that has not been updated to TS yet
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                        userData.selectedGroups.push(groupsMap[userGroup]);
-                    }
-                });
-            }
-            userData.signature = signature;
-            userData.custom_profile_info = customProfileInfo.profile;
-            return await plugins.hooks.fire('filter:posts.modifyUserInfo', userData);
-        }));
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const hookResult = await plugins.hooks.fire('filter:posts.getUserInfoForPosts', { users: result });
-        return hookResult.users;
-    };
-    Posts.overrideGuestHandle = function (postData, handle) {
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        if (meta.config.allowGuestHandles && postData && postData.user && parseInt(postData.uid, 10) === 0 && handle) {
-            // The next line calls a function in a module that has not been updated to TS yet
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-            postData.user.username = validator.escape(String(handle));
-            if (postData.user.hasOwnProperty('fullname')) {
-                postData.user.fullname = postData.user.username;
-            }
-            postData.user.displayname = postData.user.username;
-        }
-    };
+        return await user.getUsersFields(result.uids, _.uniq(result.fields));
+    }
+
     Posts.isOwner = async function (pids, uid) {
-        const numUID = parseInt(uid, 10);
+        uid = parseInt(uid, 10);
         const isArray = Array.isArray(pids);
-        if (typeof pids === 'number') {
-            pids = [pids];
-        }
-        if (numUID <= 0) {
+        pids = isArray ? pids : [pids];
+        if (uid <= 0) {
             return isArray ? pids.map(() => false) : false;
         }
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
         const postData = await Posts.getPostsFields(pids, ['uid']);
         const result = postData.map(post => post && post.uid === uid);
         return isArray ? result : result[0];
     };
+
     Posts.isModerator = async function (pids, uid) {
         if (parseInt(uid, 10) <= 0) {
-            return Array(pids.length).fill(false);
+            return pids.map(() => false);
         }
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
         const cids = await Posts.getCidsByPids(pids);
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
         return await user.isModerator(uid, cids);
     };
-    async function reduceCounters(postsByUser) {
-        const promises = [];
-        // The next line triggers the linter in that it doesn't want an await inside a loop
-        // in case the loop can be parallelized instead, however this loop must be run in order or it fails the tests
-        // eslint-disable-next-line no-await-in-loop
-        for (const uid of Object.keys(postsByUser)) {
-            const repChange = postsByUser[uid].reduce((acc, val) => acc + val.votes, 0);
-            // eslint-disable-next-line no-await-in-loop
-            await Promise.all([
-                // The next line calls a function in a module that has not been updated to TS yet
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-                user.updatePostCount(uid),
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-                user.incrementUserReputationBy(uid, -repChange),
-            ]);
-        }
-        await Promise.all(promises);
-        // await async.eachOfSeries(postsByUser, async (posts: PostData[], uid: string | number) => {
-        //     const repChange = posts.reduce((acc, val) => acc + val.votes, 0);
-        //     await Promise.all([
-        //         // The next line calls a function in a module that has not been updated to TS yet
-        //         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        //         user.updatePostCount(uid),
-        //         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        //         user.incrementUserReputationBy(uid, -repChange),
-        //     ]);
-        // });
-    }
-    async function updatePostsByUser(tid, posts, uid) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-        await db.sortedSetIncrBy(`tid:${tid}:posters`, -posts.length, uid);
-    }
-    async function updateTopic(tid, posts, toUid, postsByUser) {
-        // The next few lines call a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-        await db.sortedSetIncrBy(`tid:${tid}:posters`, posts.length, toUid);
-        const promises = [];
-        for (const uid of Object.keys(postsByUser)) {
-            promises.push(updatePostsByUser(tid, posts, uid));
-        }
-        await Promise.all(promises);
-        // await async.eachOf(postsByUser, async (posts: PostData[], uid) => {
-        //     await db.sortedSetIncrBy(`tid:${tid}:posters`, -posts.length, uid);
-        // });
-    }
-    async function updateTopicPosters(postData, toUid) {
-        const promises = [];
-        const postsByTopic = _.groupBy(postData, p => p.tid);
-        // console.log(postsByTopic)
-        for (const tid of Object.keys(postsByTopic)) {
-            const posts = postsByTopic[tid];
-            const postsByUser = _.groupBy(posts, p => parseInt(p.uid, 10));
-            promises.push(updateTopic(tid, posts, toUid, postsByUser));
-        }
-        await Promise.all(promises);
-        // await async.eachOf(postsByTopic, async (posts, tid) => {
-        //     const postsByUser = _.groupBy(posts, p => parseInt(p.uid, 10));
-        //     // The next few lines call a function in a module that has not been updated to TS yet
-        //     /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-        //     await db.sortedSetIncrBy(`tid:${tid}:posters`, posts.length, toUid);
-        //     await async.eachOf(postsByUser, async (posts, uid) => {
-        //         await db.sortedSetIncrBy(`tid:${tid}:posters`, -posts.length, uid);
-        //     });
-        //     /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-        // });
-    }
-    async function userIncrement(uid, posts) {
-        const exists = await user.exists(uid);
-        if (exists) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-            await user.incrementUserFieldBy(uid, 'topiccount', -posts.length);
-        }
-    }
-    async function reduceTopicCounts(postsByUser) {
-        const promises = [];
-        for (const uid of Object.keys(postsByUser)) {
-            const posts = postsByUser[uid];
-            promises.push(userIncrement(uid, posts));
-        }
-        await Promise.all(promises);
-        // for (const uid of Object.keys(postsByUser)) {
-        //     const posts = postsByUser[uid];
-        //     // The next few lines call functions in a module that has not been updated to TS yet
-        //     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        //     const exists: boolean = await user.exists(uid);
-        //     if (exists) {
-        //         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        //         await user.incrementUserFieldBy(uid, 'topiccount', -posts.length);
-        //     }
-        // }
-        // await async.eachSeries(Object.keys(postsByUser), async (uid): Promise<void> => {
-        //     const posts = postsByUser[uid];
-        //     // The next few lines call functions in a module that has not been updated to TS yet
-        //     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        //     const exists: boolean = await user.exists(uid);
-        //     if (exists) {
-        //         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        //         user.incrementUserFieldBy(uid, 'topiccount', -posts.length);
-        //     }
-        // });
-    }
-    async function handleMainPidOwnerChange(postData, toUid) {
-        const tids = _.uniq(postData.map(p => p.tid));
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const topicData = await topics.getTopicsFields(tids, [
-            'tid', 'cid', 'deleted', 'title', 'uid', 'mainPid', 'timestamp',
-        ]);
-        const tidToTopic = _.zipObject(tids, topicData);
-        const mainPosts = postData.filter(p => p.pid === tidToTopic[p.tid].mainPid);
-        if (!mainPosts.length) {
-            return;
-        }
-        const bulkAdd = [];
-        const bulkRemove = [];
-        const postsByUser = {};
-        mainPosts.forEach((post) => {
-            bulkRemove.push([`cid:${post.cid}:uid:${post.uid}:tids`, post.tid]);
-            bulkRemove.push([`uid:${post.uid}:topics`, post.tid]);
-            bulkAdd.push([`cid:${post.cid}:uid:${toUid}:tids`, tidToTopic[post.tid].timestamp, post.tid]);
-            bulkAdd.push([`uid:${toUid}:topics`, tidToTopic[post.tid].timestamp, post.tid]);
-            postsByUser[post.uid] = postsByUser[post.uid] || [];
-            postsByUser[post.uid].push(post);
-        });
-        await Promise.all([
-            // The next few lines call a function in a module that has not been updated to TS yet
-            /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-            db.setObjectField(mainPosts.map(p => `topic:${p.tid}`), 'uid', toUid),
-            db.sortedSetRemoveBulk(bulkRemove),
-            db.sortedSetAddBulk(bulkAdd),
-            user.incrementUserFieldBy(toUid, 'topiccount', mainPosts.length),
-            /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-            reduceTopicCounts(postsByUser),
-        ]);
-        const changedTopics = mainPosts.map(p => tidToTopic[p.tid]);
-        await plugins.hooks.fire('action:topic.changeOwner', {
-            topics: _.cloneDeep(changedTopics),
-            toUid: toUid,
-        });
-    }
+
     Posts.changeOwner = async function (pids, toUid) {
         const exists = await user.exists(toUid);
         if (!exists) {
             throw new Error('[[error:no-user]]');
         }
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
         let postData = await Posts.getPostsFields(pids, [
             'pid', 'tid', 'uid', 'content', 'deleted', 'timestamp', 'upvotes', 'downvotes',
         ]);
-        postData = postData.filter(p => p.pid && parseInt(p.uid, 10) !== parseInt(toUid, 10));
+        postData = postData.filter(p => p.pid && p.uid !== parseInt(toUid, 10));
         pids = postData.map(p => p.pid);
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+
         const cids = await Posts.getCidsByPids(pids);
+
         const bulkRemove = [];
         const bulkAdd = [];
         let repChange = 0;
@@ -320,6 +157,7 @@ module.exports = function (Posts) {
             bulkRemove.push([`uid:${post.uid}:posts`, post.pid]);
             bulkRemove.push([`cid:${post.cid}:uid:${post.uid}:pids`, post.pid]);
             bulkRemove.push([`cid:${post.cid}:uid:${post.uid}:pids:votes`, post.pid]);
+
             bulkAdd.push([`uid:${toUid}:posts`, post.timestamp, post.pid]);
             bulkAdd.push([`cid:${post.cid}:uid:${toUid}:pids`, post.timestamp, post.pid]);
             if (post.votes > 0 || post.votes < 0) {
@@ -328,31 +166,96 @@ module.exports = function (Posts) {
             postsByUser[post.uid] = postsByUser[post.uid] || [];
             postsByUser[post.uid].push(post);
         });
-        // The next few lines call a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+
         await Promise.all([
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
             db.setObjectField(pids.map(pid => `post:${pid}`), 'uid', toUid),
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
             db.sortedSetRemoveBulk(bulkRemove),
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
             db.sortedSetAddBulk(bulkAdd),
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
             user.incrementUserReputationBy(toUid, repChange),
             handleMainPidOwnerChange(postData, toUid),
             updateTopicPosters(postData, toUid),
         ]);
-        // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+
         await Promise.all([
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
             user.updatePostCount(toUid),
             reduceCounters(postsByUser),
         ]);
-        await plugins.hooks.fire('action:post.changeOwner', {
+
+        plugins.hooks.fire('action:post.changeOwner', {
             posts: _.cloneDeep(postData),
             toUid: toUid,
         });
         return postData;
     };
+
+    async function reduceCounters(postsByUser) {
+        await async.eachOfSeries(postsByUser, async (posts, uid) => {
+            const repChange = posts.reduce((acc, val) => acc + val.votes, 0);
+            await Promise.all([
+                user.updatePostCount(uid),
+                user.incrementUserReputationBy(uid, -repChange),
+            ]);
+        });
+    }
+
+    async function updateTopicPosters(postData, toUid) {
+        const postsByTopic = _.groupBy(postData, p => parseInt(p.tid, 10));
+        await async.eachOf(postsByTopic, async (posts, tid) => {
+            const postsByUser = _.groupBy(posts, p => parseInt(p.uid, 10));
+            await db.sortedSetIncrBy(`tid:${tid}:posters`, posts.length, toUid);
+            await async.eachOf(postsByUser, async (posts, uid) => {
+                await db.sortedSetIncrBy(`tid:${tid}:posters`, -posts.length, uid);
+            });
+        });
+    }
+
+    async function handleMainPidOwnerChange(postData, toUid) {
+        const tids = _.uniq(postData.map(p => p.tid));
+        const topicData = await topics.getTopicsFields(tids, [
+            'tid', 'cid', 'deleted', 'title', 'uid', 'mainPid', 'timestamp',
+        ]);
+        const tidToTopic = _.zipObject(tids, topicData);
+
+        const mainPosts = postData.filter(p => p.pid === tidToTopic[p.tid].mainPid);
+        if (!mainPosts.length) {
+            return;
+        }
+
+        const bulkAdd = [];
+        const bulkRemove = [];
+        const postsByUser = {};
+        mainPosts.forEach((post) => {
+            bulkRemove.push([`cid:${post.cid}:uid:${post.uid}:tids`, post.tid]);
+            bulkRemove.push([`uid:${post.uid}:topics`, post.tid]);
+
+            bulkAdd.push([`cid:${post.cid}:uid:${toUid}:tids`, tidToTopic[post.tid].timestamp, post.tid]);
+            bulkAdd.push([`uid:${toUid}:topics`, tidToTopic[post.tid].timestamp, post.tid]);
+            postsByUser[post.uid] = postsByUser[post.uid] || [];
+            postsByUser[post.uid].push(post);
+        });
+
+        await Promise.all([
+            db.setObjectField(mainPosts.map(p => `topic:${p.tid}`), 'uid', toUid),
+            db.sortedSetRemoveBulk(bulkRemove),
+            db.sortedSetAddBulk(bulkAdd),
+            user.incrementUserFieldBy(toUid, 'topiccount', mainPosts.length),
+            reduceTopicCounts(postsByUser),
+        ]);
+
+        const changedTopics = mainPosts.map(p => tidToTopic[p.tid]);
+        plugins.hooks.fire('action:topic.changeOwner', {
+            topics: _.cloneDeep(changedTopics),
+            toUid: toUid,
+        });
+    }
+
+    async function reduceTopicCounts(postsByUser) {
+        await async.eachSeries(Object.keys(postsByUser), async (uid) => {
+            const posts = postsByUser[uid];
+            const exists = await user.exists(uid);
+            if (exists) {
+                await user.incrementUserFieldBy(uid, 'topiccount', -posts.length);
+            }
+        });
+    }
 };
