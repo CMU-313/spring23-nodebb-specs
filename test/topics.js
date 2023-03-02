@@ -288,6 +288,13 @@ describe('Topic\'s', () => {
             assert(newTopic.resolved === 'true' || newTopic.resolved);
         });
 
+        it('should error when setResolved is called on invalid data', (done) => {
+            topics.setResolved(-1, (err) => {
+                assert.equal(err.message, '[[error:invalid-data]]');
+                done();
+            });
+        });
+
         it('should change resolved status when socket API is called', async () => {
             assert(newTopic.resolved === 'true' || newTopic.resolved);
             await socketTopics.setResolved({ uid: adminUid }, { tid: newTopic.tid });
@@ -296,6 +303,13 @@ describe('Topic\'s', () => {
             await socketTopics.setResolved({ uid: adminUid }, { tid: newTopic.tid });
             newTopic = await topics.getTopicData(newTopic.tid);
             assert(newTopic.resolved === 'true' || newTopic.resolved);
+        });
+
+        it('should error when socket API is called on invalid data', (done) => {
+            socketTopics.setResolved((err) => {
+                assert.equal(err.message, '[[error:invalid-data]]');
+                done();
+            });
         });
     });
 

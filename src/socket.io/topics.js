@@ -126,6 +126,9 @@ SocketTopics.getPostCountInTopic = async function (socket, tid) {
 };
 
 SocketTopics.setResolved = async function (socket, data) {
+    if (!data || !data.tid) {
+        throw new Error('[[error:invalid-data]]');
+    }
     await topics.setResolved(data.tid);
 };
 
