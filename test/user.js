@@ -25,6 +25,7 @@ const socketUser = require('../src/socket.io/user');
 const apiUser = require('../src/api/users');
 const utils = require('../src/utils');
 const privileges = require('../src/privileges');
+const { user } = require('../src/controllers');
 
 describe('User', () => {
     let userData;
@@ -171,6 +172,30 @@ describe('User', () => {
                 tryCreate({ username: 'notdupe2', email: 'dupe@dupe.com' }),
             ]);
             assert.strictEqual(err.message, '[[error:email-taken]]');
+        });
+
+        it('accounttype should have trailing/preceding spaces removed', async () => {
+            let inputData = {
+                username: 'yoitsroro',
+                password: userData.password,
+                email: userData.email,
+            };
+            inputData['account-type'] = '     student ';
+            
+            const uid = await User.create(inputData);
+            const data = await User.getUserData(uid);
+            assert.strictEqual(data.accounttype, 'student');
+        });
+
+        it('accounttype should default to student, if not specified', async () => {
+            const inputData = {
+                username: 'itsroro',
+                password: userData.password,
+                email: userData.email,
+            };
+            const uid = await User.create(inputData);
+            const data = await User.getUserData(uid);
+            assert.strictEqual(data.accounttype, 'student');
         });
     });
 
