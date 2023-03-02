@@ -176,8 +176,8 @@ describe('User', () => {
         it('accounttype should have trailing/preceding spaces removed', async () => {
             const inputData = {
                 username: 'yoitsroro',
-                password: userData.password,
-                email: userData.email,
+                password: 'hammershark',
+                email: 'rohinib@example.com',
             };
             inputData['account-type'] = '     student ';
             const uid = await User.create(inputData);
