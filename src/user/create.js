@@ -18,8 +18,8 @@ module.exports = function (User) {
         if (data.email !== undefined) {
             data.email = String(data.email).trim();
         }
-        if (data.accounttype !== undefined) {
-            data.accounttype = data.accounttype.trim();
+        if (data['account-type'] !== undefined) {
+            data.accounttype = data['account-type'].trim();
         }
 
         await User.isDataValid(data);
@@ -49,7 +49,7 @@ module.exports = function (User) {
         let userData = {
             username: data.username,
             userslug: data.userslug,
-            accounttype: data.accounttype || 'student',
+            accounttype: data['account-type'] || 'student',
             email: data.email || '',
             joindate: timestamp,
             lastonline: timestamp,
@@ -86,6 +86,7 @@ module.exports = function (User) {
         const bulkAdd = [
             ['username:uid', userData.uid, userData.username],
             [`user:${userData.uid}:usernames`, timestamp, `${userData.username}:${timestamp}`],
+            ['accounttype:uid', userData.uid, userData.accounttype],
             ['username:sorted', 0, `${userData.username.toLowerCase()}:${userData.uid}`],
             ['userslug:uid', userData.uid, userData.userslug],
             ['users:joindate', timestamp, userData.uid],
