@@ -581,6 +581,8 @@ describe('User', () => {
             userData['account-type'] = '  instructor ';
             const uid = await User.create(userData);
             assert(await db.isSortedSetMember('accounttype:uid', 'instructor'));
+            await User.deleteAccount(uid);
+            assert(!await db.isSortedSetMember('accounttype:uid', 'instructor'));
         });
 
         it('should not re-add user to users:postcount if post is purged after user account deletion', async () => {
