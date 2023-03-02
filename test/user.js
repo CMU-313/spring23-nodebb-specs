@@ -581,8 +581,12 @@ describe('User', () => {
             userData['account-type'] = '  instructor ';
             const uid = await User.create(userData);
             assert(await db.isSortedSetMember('accounttype:uid', 'instructor'));
+            // Check that account type field is stored as an singleton object
+            assert(await db.sortedSetCount('accounttype:uid', '-inf', '+inf') === 1);
             await User.deleteAccount(uid);
             assert(!await db.isSortedSetMember('accounttype:uid', 'instructor'));
+            // Assert that once account is deleted, object is now empty
+            assert(await db.sortedSetCount('accounttype:uid', '-inf', '+inf') === 0);
         });
 
         it('should not re-add user to users:postcount if post is purged after user account deletion', async () => {
