@@ -172,6 +172,18 @@ describe('User', () => {
             ]);
             assert.strictEqual(err.message, '[[error:email-taken]]');
         });
+
+        it('accounttype should have trailing/preceding spaces removed', async () => {
+            const inputData = {
+                username: 'yoitsroro',
+                password: userData.password,
+                email: userData.email,
+            };
+            inputData['account-type'] = '     student ';
+            const uid = await User.create(inputData);
+            const data = await User.getUserData(uid);
+            assert.strictEqual(data.accounttype, 'student');
+        });
     });
 
     describe('.uniqueUsername()', () => {
