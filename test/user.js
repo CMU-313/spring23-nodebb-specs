@@ -572,6 +572,17 @@ describe('User', () => {
             });
         });
 
+        it('should not store accounttype once account is deleted', async () => {
+            const userData = {
+                username: 'anolduser',
+                password: 'AnolDpass',
+                email: 'oops@example.com',
+            };
+            userData['account-type'] = '  instructor ';
+            const uid = await User.create(userData);
+            assert(await db.isSortedSetMember('accounttype:uid', uid));
+        });
+
         it('should not re-add user to users:postcount if post is purged after user account deletion', async () => {
             const uid = await User.create({ username: 'olduserwithposts' });
             assert(await db.isSortedSetMember('users:postcount', uid));
