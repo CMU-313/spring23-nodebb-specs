@@ -1,5 +1,5 @@
-import _ = require('lodash');
 import path = require('path');
+import _ = require('lodash');
 import nconf = require('nconf');
 import util = require('util');
 import rimraf = require('rimraf');
