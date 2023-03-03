@@ -189,7 +189,7 @@ export = function (User: TheUser) {
             data.email = String(data.email).trim();
         }
         if (data['account-type'] !== undefined) {
-            data.accounttype = (data['account-type'] as string).trim();
+            data['account-type'] = (data['account-type'] as string).trim();
         }
 
         await User.isDataValid(data);

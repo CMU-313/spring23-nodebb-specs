@@ -172,6 +172,41 @@ describe('User', () => {
             ]);
             assert.strictEqual(err.message, '[[error:email-taken]]');
         });
+
+        it('accounttype should have trailing/preceding spaces removed', async () => {
+            const inputData = {
+                username: 'yoitsroro',
+                password: 'hammershark',
+                email: 'rohinib@example.com',
+            };
+            inputData['account-type'] = '     student ';
+            const uid = await User.create(inputData);
+            const data = await User.getUserData(uid);
+            assert.strictEqual(data.accounttype, 'student');
+        });
+
+        it('accounttype should default to student, if not specified', async () => {
+            const inputData = {
+                username: 'itsroro',
+                password: 'hammershark23',
+                email: 'rb@example.com',
+            };
+            const uid = await User.create(inputData);
+            const data = await User.getUserData(uid);
+            assert.strictEqual(data.accounttype, 'student');
+        });
+
+        it('accounttype should store correct field, if specified', async () => {
+            const inputData = {
+                username: 'rb123',
+                password: 'hammershark234',
+                email: 'roba@example.com',
+            };
+            inputData['account-type'] = '     instructor    ';
+            const uid = await User.create(inputData);
+            const data = await User.getUserData(uid);
+            assert.strictEqual(data.accounttype, 'instructor');
+        });
     });
 
     describe('.uniqueUsername()', () => {
@@ -535,6 +570,23 @@ describe('User', () => {
                     done();
                 });
             });
+        });
+
+        it('should not store accounttype once account is deleted', async () => {
+            const userData = {
+                username: 'anolduser',
+                password: 'AnolDpass',
+                email: 'oops@example.com',
+            };
+            userData['account-type'] = '  instructor ';
+            const uid = await User.create(userData);
+            assert(await db.isSortedSetMember('accounttype:uid', 'instructor'));
+            // Check that account type field is stored as an singleton object
+            assert(await db.sortedSetCount('accounttype:uid', '-inf', '+inf') === 1);
+            await User.deleteAccount(uid);
+            assert(!await db.isSortedSetMember('accounttype:uid', 'instructor'));
+            // Assert that once account is deleted, object is now empty
+            assert(await db.sortedSetCount('accounttype:uid', '-inf', '+inf') === 0);
         });
 
         it('should not re-add user to users:postcount if post is purged after user account deletion', async () => {
