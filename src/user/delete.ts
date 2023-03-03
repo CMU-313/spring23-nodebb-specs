@@ -1,39 +1,78 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const _ = require("lodash");
-const path = require("path");
-const nconf = require("nconf");
-const util = require("util");
-const rimraf = require("rimraf");
-const db = require("../database");
-const posts = require("../posts");
-const flags = require("../flags");
-const topics = require("../topics");
-const groups = require("../groups");
-const messaging = require("../messaging");
-const plugins = require("../plugins");
-const batch = require("../batch");
-const rimrafAsync = util.promisify(rimraf);
-module.exports = function (User) {
+import path = require('path');
+import _ = require('lodash');
+import nconf = require('nconf');
+import util = require('util');
+import rimraf = require('rimraf');
+
+import db = require('../database');
+import posts = require('../posts');
+import flags = require('../flags');
+import topics = require('../topics');
+import groups = require('../groups');
+import messaging = require('../messaging');
+import plugins = require('../plugins');
+import batch = require('../batch');
+
+type UserData = {
+    username: string,
+    userslug: string,
+    accounttype: string,
+    email: string,
+    joindate: number,
+    lastonline: number,
+    status: string,
+    gdpr_consent?: boolean,
+    acceptTos: number,
+    uid: number,
+    fullname: string,
+    password: string,
+}
+
+interface deleting {
+    delete?: (callerUid: string, uid: string) =>
+Promise<UserData>;
+    deleteContent?: (arg0: string, arg1: string) =>
+Promise<void>;
+    deleteAccount?: (arg0: string) =>
+Promise<UserData>;
+    deleteUpload?: (arg0: string, arg1: string, arg2: Array<string>) =>
+Promise<UserData>;
+    auth: {
+        revokeAllSessions?: (arg0: string) => Promise<void>;
+    };
+    reset: {
+        cleanByUid?: (arg0: string) => Promise<void>;
+    }
+}
+
+const rimrafAsync = util.promisify(rimraf as (path: string, callback:
+    (error: Error) => void) => void) as (path: string) => Promise<void>;
+
+module.exports = function (User : deleting) {
     const deletesInProgress = {};
+
     User.delete = async (callerUid, uid) => {
         await User.deleteContent(callerUid, uid);
         return await User.deleteAccount(uid);
     };
-    async function deletePosts(callerUid, uid) {
+
+    async function deletePosts(callerUid : string, uid : string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        await batch.processSortedSet(`uid:${uid}:posts`, async (pids) => { await posts.purge(pids, callerUid); }, { alwaysStartAt: 0, batch: 500 });
+        await batch.processSortedSet(`uid:${uid}:posts`, async (pids: string) => { await posts.purge(pids, callerUid); }, { alwaysStartAt: 0, batch: 500 });
     }
-    async function deleteTopicsHelper(tid, callerUid) {
+
+
+    async function deleteTopicsHelper(tid : string, callerUid : string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await topics.purge(tid, callerUid);
     }
-    async function deleteTopics(callerUid, uid) {
+
+    async function deleteTopics(callerUid : string, uid : string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        await batch.processSortedSet(`uid:${uid}:topics`, async (ids) => {
+        await batch.processSortedSet(`uid:${uid}:topics`, async (ids : string[]) => {
             const promises = [];
             for (const tid of ids) {
                 promises.push(deleteTopicsHelper(tid, callerUid));
@@ -41,24 +80,28 @@ module.exports = function (User) {
             await Promise.all(promises);
         }, { alwaysStartAt: 0 });
     }
-    async function deleteUploads(callerUid, uid) {
+    async function deleteUploads(callerUid: string, uid: string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const uploads = await db.getSortedSetMembers(`uid:${uid}:uploads`);
+        const uploads: string[] = await db.getSortedSetMembers(`uid:${uid}:uploads`) as string[];
         await User.deleteUpload(callerUid, uid, uploads);
     }
-    async function deleteQueuedHelper(id) {
+
+    async function deleteQueuedHelper(id : string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await posts.removeFromQueue(id);
     }
-    async function deleteQueued(uid) {
-        const deleteIds = [];
-        await batch.processSortedSet('post:queue', async (ids) => {
+
+    async function deleteQueued(uid: string) {
+        const deleteIds: string[] = [];
+        await batch.processSortedSet('post:queue', async (ids: string[]) => {
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            const data = await db.getObjects(ids.map((id) => `post:queue:${id}`));
-            const userQueuedIds = data.filter((d) => parseInt(d.uid, 10) === parseInt(uid, 10)).map((d) => d.id);
+            const data: Record<string, string>[] = await db.getObjects(ids.map((id: string) => `post:queue:${id}`)) as Record<string, string>[];
+            const userQueuedIds = data.filter(
+                (d: { uid: string; }) => parseInt(d.uid, 10) === parseInt(uid, 10)
+            ).map((d: { id: string; }) => d.id);
             deleteIds.concat(userQueuedIds);
         }, { batch: 500 });
         const promises = [];
@@ -67,6 +110,8 @@ module.exports = function (User) {
         }
         await Promise.all(promises);
     }
+
+
     User.deleteContent = async function (callerUid, uid) {
         if (parseInt(uid, 10) <= 0) {
             throw new Error('[[error:invalid-uid]]');
@@ -81,7 +126,7 @@ module.exports = function (User) {
         await deleteQueued(uid);
         delete deletesInProgress[uid];
     };
-    async function removeFromSortedSets(uid) {
+    async function removeFromSortedSets(uid: string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await db.sortedSetsRemove([
@@ -98,77 +143,85 @@ module.exports = function (User) {
             'digest:month:uids',
         ], uid);
     }
-    async function deleteVotesHelper(pid, uid) {
+
+    async function deleteVotesHelper(pid: string, uid: string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await posts.unvote(pid, uid);
     }
-    async function deleteVotes(uid) {
-        const [upvotedPids, downvotedPids] = await Promise.all([
+    async function deleteVotes(uid: string) {
+        const [upvotedPids, downvotedPids]: [string[], string[]] = await Promise.all([
+        // The next line calls a function in a module that has not been updated to TS yet
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            db.getSortedSetRange(`uid:${uid}:upvote`, 0, -1) as Promise<[string]>,
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            db.getSortedSetRange(`uid:${uid}:upvote`, 0, -1),
-            // The next line calls a function in a module that has not been updated to TS yet
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            db.getSortedSetRange(`uid:${uid}:downvote`, 0, -1),
+            db.getSortedSetRange(`uid:${uid}:downvote`, 0, -1) as Promise<[string]>,
         ]);
         const pids = _.uniq(upvotedPids.concat(downvotedPids).filter(Boolean));
+
         const promises = [];
         for (const pid of pids) {
             promises.push(deleteVotesHelper(pid, uid));
         }
         await Promise.all(promises);
     }
-    async function deleteChats(uid) {
+
+    async function deleteChats(uid: string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const roomIds = await db.getSortedSetRange(`uid:${uid}:chat:rooms`, 0, -1);
-        const userKeys = roomIds.map((roomId) => `uid:${uid}:chat:room:${roomId}:mids`);
+        const roomIds: string[] = await db.getSortedSetRange(`uid:${uid}:chat:rooms`, 0, -1) as string[];
+        const userKeys: string[] = roomIds.map((roomId: string) => `uid:${uid}:chat:room:${roomId}:mids`);
+
         await Promise.all([
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             messaging.leaveRooms(uid, roomIds), db.deleteAll(userKeys),
         ]);
     }
-    async function deleteUserIps(uid) {
+
+    async function deleteUserIps(uid: string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const ips = await db.getSortedSetRange(`uid:${uid}:ip`, 0, -1);
+        const ips: string[] = await db.getSortedSetRange(`uid:${uid}:ip`, 0, -1) as string[];
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        await db.sortedSetsRemove(ips.map((ip) => `ip:${ip}:uid`), uid);
+        await db.sortedSetsRemove(ips.map((ip: string) => `ip:${ip}:uid`), uid);
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await db.delete(`uid:${uid}:ip`);
     }
-    async function deleteUserFromFollowers(uid) {
-        const [followers, following] = await Promise.all([
+
+    async function deleteUserFromFollowers(uid: string) {
+        const [followers, following]: [string[], string[]] = await Promise.all([
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            db.getSortedSetRange(`followers:${uid}`, 0, -1),
+            db.getSortedSetRange(`followers:${uid}`, 0, -1) as Promise<[string]>,
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            db.getSortedSetRange(`following:${uid}`, 0, -1),
+            db.getSortedSetRange(`following:${uid}`, 0, -1) as Promise<[string]>,
         ]);
-        async function updateCountHelper(name, uid, fieldName) {
+        async function updateCountHelper(name: string, uid: string, fieldName: string) {
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             // The next line calls a function in a module that has not been updated to TS yet
             /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-            const count = await db.sortedSetCard(name + uid);
-            const count_ = parseInt(count, 10) || 0;
+            const count: string = await db.sortedSetCard(name + uid) as string;
+            const count_: number = parseInt(count, 10) || 0;
             await db.setObjectField(`user:${uid}`, fieldName, count_);
             /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
         }
-        async function updateCount(uids, name, fieldName) {
+        async function updateCount(uids: string[], name: string, fieldName: string) {
             const promises = [];
             for (const uid of uids) {
                 promises.push(updateCountHelper(name, uid, fieldName));
             }
             await Promise.all(promises);
         }
-        const followingSets = followers.map((uid) => `following:${uid}`);
-        const followerSets = following.map((uid) => `followers:${uid}`);
+
+        const followingSets = followers.map((uid: string) => `following:${uid}`);
+        const followerSets = following.map((uid: string) => `followers:${uid}`);
+
         await Promise.all([
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
@@ -177,32 +230,38 @@ module.exports = function (User) {
             updateCount(followers, 'following:', 'followingCount'),
         ]);
     }
-    async function deleteImages(uid) {
+
+    async function deleteImages(uid: string) {
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const folder = path.join(nconf.get('upload_path'), 'profile');
+        const folder = path.join(nconf.get('upload_path') as string, 'profile');
         await Promise.all([
             rimrafAsync(path.join(folder, `${uid}-profilecover*`)),
             rimrafAsync(path.join(folder, `${uid}-profileavatar*`)),
         ]);
     }
+
     User.deleteAccount = async function (uid) {
         if (deletesInProgress[uid] === 'user.deleteAccount') {
             throw new Error('[[error:already-deleting]]');
         }
         deletesInProgress[uid] = 'user.deleteAccount';
+
         await removeFromSortedSets(uid);
         // The next line calls a function in a module that has not been updated to TS yet
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const userData = await db.getObject(`user:${uid}`);
+        const userData : UserData = await db.getObject(`user:${uid}`) as UserData;
+
         if (!userData || !userData.username) {
             delete deletesInProgress[uid];
             throw new Error('[[error:no-user]]');
         }
+
         await plugins.hooks.fire('static:user.delete', { uid: uid, userData: userData });
         await deleteVotes(uid);
         await deleteChats(uid);
         await User.auth.revokeAllSessions(uid);
+
         const keys = [
             `uid:${uid}:notifications:read`,
             `uid:${uid}:notifications:unread`,
@@ -223,6 +282,7 @@ module.exports = function (User) {
             `uid:${uid}:sessions`, `uid:${uid}:sessionUUID:sessionId`,
             `invitation:uid:${uid}`,
         ];
+
         const bulkRemove = [
             ['username:uid', userData.username],
             ['username:sorted', `${userData.username.toLowerCase()}:${uid}`],
@@ -234,9 +294,11 @@ module.exports = function (User) {
             bulkRemove.push(['email:uid', userData.email.toLowerCase()]);
             bulkRemove.push(['email:sorted', `${userData.email.toLowerCase()}:${uid}`]);
         }
+
         if (userData.fullname) {
             bulkRemove.push(['fullname:sorted', `${userData.fullname.toLowerCase()}:${uid}`]);
         }
+
         await Promise.all([
             // The next line calls a function in a module that has not been updated to TS yet
             // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
