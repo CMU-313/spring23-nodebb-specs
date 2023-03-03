@@ -244,6 +244,75 @@ describe('Topic\'s', () => {
         });
     });
 
+    describe('Resolved Methods', () => {
+        let newTopic;
+        let newPost;
+        before((done) => {
+            topics.post({
+                uid: topic.userId,
+                title: topic.title,
+                content: topic.content,
+                cid: topic.categoryId,
+            }, (err, result) => {
+                if (err) {
+                    return done(err);
+                }
+
+                newTopic = result.topicData;
+                newPost = result.postData;
+                done();
+            });
+        });
+
+        it('should set a topic as unresolved by default', (done) => {
+            // these asserts are all 'or' statements because redis saves this field
+            // differently than mongo or postgres (as a string) for some reason
+            assert(newTopic.resolved === 'false' || !newTopic.resolved);
+            done();
+        });
+
+        it('should update a topic to resolved when an answer is posted', async () => {
+            assert(newTopic.resolved === 'false' || !newTopic.resolved);
+            await topics.reply({ uid: topic.userId, content: 'test reply', tid: newTopic.tid, toPid: newPost.pid });
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved === 'true' || newTopic.resolved);
+        });
+
+        it('should change resolved status when setResolved is called', async () => {
+            assert(newTopic.resolved === 'true' || newTopic.resolved);
+            await topics.setResolved(newTopic.tid);
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved === 'false' || !newTopic.resolved);
+            await topics.setResolved(newTopic.tid);
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved === 'true' || newTopic.resolved);
+        });
+
+        it('should error when setResolved is called on invalid data', (done) => {
+            topics.setResolved(-1, (err) => {
+                assert.equal(err.message, '[[error:invalid-data]]');
+                done();
+            });
+        });
+
+        it('should change resolved status when socket API is called', async () => {
+            assert(newTopic.resolved === 'true' || newTopic.resolved);
+            await socketTopics.setResolved({ uid: adminUid }, { tid: newTopic.tid });
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved === 'false' || !newTopic.resolved);
+            await socketTopics.setResolved({ uid: adminUid }, { tid: newTopic.tid });
+            newTopic = await topics.getTopicData(newTopic.tid);
+            assert(newTopic.resolved === 'true' || newTopic.resolved);
+        });
+
+        it('should error when socket API is called on invalid data', (done) => {
+            socketTopics.setResolved((err) => {
+                assert.equal(err.message, '[[error:invalid-data]]');
+                done();
+            });
+        });
+    });
+
     describe('.reply', () => {
         let newTopic;
         let newPost;
