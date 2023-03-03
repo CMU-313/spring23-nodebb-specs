@@ -45,9 +45,6 @@ Promise<UserData>;
     }
 }
 
-
-
-
 const rimrafAsync = util.promisify(rimraf as (path: string, callback:
     (error: Error) => void) => void) as (path: string) => Promise<void>;
 
@@ -291,6 +288,7 @@ module.exports = function (User : deleting) {
             ['username:sorted', `${userData.username.toLowerCase()}:${uid}`],
             ['userslug:uid', userData.userslug],
             ['fullname:uid', userData.fullname],
+            ['accounttype:uid', userData.accounttype],
         ];
         if (userData.email) {
             bulkRemove.push(['email:uid', userData.email.toLowerCase()]);
