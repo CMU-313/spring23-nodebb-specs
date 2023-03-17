@@ -1,6 +1,7 @@
 {
     "name": "nodebb",
     "license": "GPL-3.0",
+    "iroh": "^0.3.0",
     "description": "NodeBB Forum",
     "version": "2.8.1",
     "homepage": "http://www.nodebb.org",
