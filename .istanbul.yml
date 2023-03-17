@@ -1,0 +1,14 @@
+instrumentation:
+  root: .
+  include-all-sources: true
+  exclude:
+    - "node_modules/**"
+    - "public/**"
+    - "tests/**"
+
+reporting:
+  dir: coverage
+  reports:
+    - lcovonly
+    - html
+  print: detail
