@@ -198,5 +198,15 @@
             "email": "baris@nodebb.org",
             "url": "https://github.com/barisusakli"
         }
-    ]
+    ],
+    "ts-standard": {
+        "ignore": [
+            "dist",
+            "src/**/*.js",
+            "test/**/*.js",
+            "public/**/*.js",
+            "*.js",
+            "*.cjs"
+        ]
+    }
 }
