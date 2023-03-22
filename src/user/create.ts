@@ -144,7 +144,7 @@ export = function (User: TheUser) {
       ['users:reputation', 0, userData.uid]
     ]
 
-    if (userData.fullname !== null && userData.fullname !== undefined) {
+    if (userData.fullname !== null && userData.fullname !== undefined && userData.fullname.length > 0) {
       bulkAdd.push(['fullname:sorted', 0, `${userData.fullname.toLowerCase()}:${userData.uid}`])
     }
 
@@ -160,11 +160,13 @@ export = function (User: TheUser) {
       /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
     ])
 
-    if (userData.email !== null && userData.email !== undefined && isFirstUser) {
+    if (userData.email !== null && userData.email !== undefined &&
+      userData.email.length > 0 && isFirstUser) {
       await user.email.confirmByUid(userData.uid)
     }
 
-    if (userData.email !== null && userData.email !== undefined && userData.uid > 1) {
+    if (userData.email !== null && userData.email !== undefined &&
+      userData.email.length > 0 && userData.uid > 1) {
       await user.email.sendValidationEmail(userData.uid, {
         email: userData.email,
         template: 'welcome',
@@ -189,14 +191,14 @@ export = function (User: TheUser) {
     if (data.email !== undefined) {
       data.email = String(data.email).trim()
     }
-    if (data['account-type'] !== undefined) {
+    if (data['account-type'] !== undefined && data['account-type'] !== null) {
       data['account-type'] = (data['account-type'] as string).trim()
     }
 
     await User.isDataValid(data)
 
     await lock(data.username, '[[error:username-taken]]')
-    if (data.email && data.email !== data.username) {
+    if (data.email !== null && data.email !== undefined && data.email !== data.username) {
       await lock(data.email, '[[error:email-taken]]')
     }
 
@@ -209,19 +211,21 @@ export = function (User: TheUser) {
   }
 
   User.isDataValid = async function (userData: Data): Promise<void> {
-    if (userData.email && !utils.isEmailValid(userData.email)) {
+    if (userData.email !== null && userData.email !== undefined && !(utils.isEmailValid(userData.email) as boolean)) {
       throw new Error('[[error:invalid-email]]')
     }
 
-    if (!utils.isUserNameValid(userData.username) || !userData.userslug) {
+    if (!(utils.isUserNameValid(userData.username) as boolean) ||
+      userData.userslug === null || userData.userslug === undefined ||
+      userData.userslug.length <= 0) {
       throw new Error(`[[error:invalid-username, ${userData.username}]]`)
     }
 
-    if (userData.password) {
+    if (userData.password !== null && userData.password !== undefined) {
       User.isPasswordValid(userData.password)
     }
 
-    if (userData.email) {
+    if (userData.email !== null && userData.email !== undefined) {
       const available = await user.email.available(userData.email)
       if (!available) {
         throw new Error('[[error:email-taken]]')
@@ -231,7 +235,7 @@ export = function (User: TheUser) {
 
   User.isPasswordValid = function (password: string, minStrength?: number): void {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call
-    minStrength = (minStrength || minStrength === 0) ? minStrength : meta.config.minimumPasswordStrength as number
+    minStrength = minStrength ?? (meta.config.minimumPasswordStrength as number)
 
     // Sanity checks: Checks if defined and is string
     if (!password || !utils.isPasswordValid(password)) {
