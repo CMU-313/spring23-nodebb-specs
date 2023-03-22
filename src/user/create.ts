@@ -48,10 +48,10 @@ interface Result {
 }
 
 interface TheUser {
-  create?: (data: Data) => Promise<number>
-  isDataValid?: (userData: Data) => Promise<void>
-  isPasswordValid?: (password: string, minStrength?: number) => void
-  uniqueUsername?: (userData: UserData) => Promise<string>
+  create: (data: Data) => Promise<number>
+  isDataValid: (userData: Data) => Promise<void>
+  isPasswordValid: (password: string, minStrength?: number) => void
+  uniqueUsername: (userData: UserData) => Promise<string | null>
 }
 
 export = function (User: TheUser) {
@@ -64,8 +64,8 @@ export = function (User: TheUser) {
     }
   }
 
-  async function storePassword (uid: number, password: string): Promise<number> {
-    if (!password) {
+  async function storePassword (uid: number, password: string): Promise<void> {
+    if (typeof password === 'string' && password.length === 0) {
       return
     }
     // The next line calls a function in a module that has not been updated to TS yet
@@ -83,13 +83,14 @@ export = function (User: TheUser) {
   }
 
   async function create (data: Data): Promise<number> {
-    const timestamp: number = data.timestamp || Date.now()
+    const timestamp: number = data.timestamp !== 0 ? data.timestamp : Date.now()
+    const inAccType = (data['account-type'] as string)
 
     let userData: UserData = {
       username: data.username,
       userslug: data.userslug,
-      accounttype: (data['account-type'] as string) || 'student',
-      email: data.email || '',
+      accounttype: typeof inAccType === 'string' && inAccType.length !== 0 ? inAccType : 'student',
+      email: typeof data.email === 'string' && data.email.length !== 0 ? data.email : '',
       joindate: timestamp,
       lastonline: timestamp,
       status: 'online',
@@ -99,7 +100,7 @@ export = function (User: TheUser) {
       password: ''
     };
     ['picture', 'fullname', 'location', 'birthday'].forEach((field) => {
-      if (data[field]) {
+      if (data[field] !== null && data[field] !== undefined) {
         userData[field] = data[field] as string
       }
     })
@@ -110,8 +111,8 @@ export = function (User: TheUser) {
       userData.acceptTos = 1
     }
 
-    const renamedUsername: string = await User.uniqueUsername(userData)
-    const userNameChanged = !!renamedUsername
+    const renamedUsername: string = await User.uniqueUsername(userData) as string
+    const userNameChanged = Boolean(renamedUsername) // is this same as !! ?
     if (userNameChanged) {
       userData.username = renamedUsername
       userData.userslug = slugify(renamedUsername) as string
@@ -143,7 +144,7 @@ export = function (User: TheUser) {
       ['users:reputation', 0, userData.uid]
     ]
 
-    if (userData.fullname) {
+    if (userData.fullname !== null && userData.fullname !== undefined) {
       bulkAdd.push(['fullname:sorted', 0, `${userData.fullname.toLowerCase()}:${userData.uid}`])
     }
 
@@ -159,16 +160,16 @@ export = function (User: TheUser) {
       /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
     ])
 
-    if (userData.email && isFirstUser) {
+    if (userData.email !== null && userData.email !== undefined && isFirstUser) {
       await user.email.confirmByUid(userData.uid)
     }
 
-    if (userData.email && userData.uid > 1) {
+    if (userData.email !== null && userData.email !== undefined && userData.uid > 1) {
       await user.email.sendValidationEmail(userData.uid, {
         email: userData.email,
         template: 'welcome',
         // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call,@typescript-eslint/strict-boolean-expressions
         subject: `[[email:welcome-to, ${(meta.config.title as string) || (meta.config.browserTitle as string) || 'NodeBB'}]]`
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call
       }).catch(err => winston.error(`[user.create] Validation email failed to send\n[emailer.send] ${err.stack as string}`))
@@ -202,7 +203,7 @@ export = function (User: TheUser) {
     try {
       return await create(data)
     } finally {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call,@typescript-eslint/strict-boolean-expressions
       await db.deleteObjectFields('locks', [data.username, data.email])
     }
   }
@@ -254,7 +255,7 @@ export = function (User: TheUser) {
     }
   }
 
-  User.uniqueUsername = async function (userData: UserData): Promise<string> {
+  User.uniqueUsername = async function (userData: UserData): Promise<string | null> {
     let numTries = 0
     let { username } = userData
     while (true) {

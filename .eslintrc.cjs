@@ -64,6 +64,7 @@ function find_compiled_js() {
                 rules: {
                     "no-use-before-define": "off",
                     "@typescript-eslint/no-use-before-define": "error",
+                    "@typescript-eslint/strict-boolean-expressions": "warn",
                     "indent": ["error", 2],
                     "semi": ["error", "never"],
                     "comma-dangle": ["error", "never"],
