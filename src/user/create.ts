@@ -238,7 +238,8 @@ export = function (User: TheUser) {
     minStrength = minStrength ?? (meta.config.minimumPasswordStrength as number)
 
     // Sanity checks: Checks if defined and is string
-    if (!password || !utils.isPasswordValid(password)) {
+    if (password === null || password === undefined ||
+      password.length <= 0 || !(utils.isPasswordValid(password) as boolean)) {
       throw new Error('[[error:invalid-password]]')
     }
 
@@ -268,7 +269,7 @@ export = function (User: TheUser) {
       const exists: boolean = await meta.userOrGroupExists(username)
       /* eslint-enable @typescript-eslint/no-unsafe-assignment, no-await-in-loop */
       if (!exists) {
-        return numTries ? username : null
+        return numTries === 0 ? username : null
       }
       username = `${userData.username} ${numTries.toString(32)}`
       numTries += 1
