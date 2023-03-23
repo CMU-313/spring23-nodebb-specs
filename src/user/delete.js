@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const _ = require("lodash");
 const path = require("path");
+const _ = require("lodash");
 const nconf = require("nconf");
 const util = require("util");
 const rimraf = require("rimraf");
