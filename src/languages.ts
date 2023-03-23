@@ -69,8 +69,8 @@ export async function listCodes (): Promise<string[]> {
   return []
 }
 
-let listCache: (LanguageData | undefined)[] = [undefined]
-export async function list (): Promise<(LanguageData | undefined)[]> {
+let listCache: (LanguageData | undefined)[] | null = null
+export async function list (): Promise<(LanguageData | undefined)[] | undefined > {
   if (listCache && (listCache.length > 0)) {
     return listCache
   }
