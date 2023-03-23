@@ -65,7 +65,7 @@ export = function (User: TheUser) {
   }
 
   async function storePassword (uid: number, password: string): Promise<void> {
-    if (!password) {
+    if (typeof password === 'string' && password.length < 0) {
       return
     }
     // The next line calls a function in a module that has not been updated to TS yet
@@ -83,13 +83,15 @@ export = function (User: TheUser) {
   }
 
   async function create (data: Data): Promise<number> {
-    const timestamp: number = data.timestamp || Date.now()
+    const timecheck = data.timestamp !== null && data.timestamp !== undefined
+    const timestamp: number = timecheck ? data.timestamp : Date.now()
+    const inAccType = (data['account-type'] as string)
 
     let userData: UserData = {
       username: data.username,
       userslug: data.userslug,
-      accounttype: (data['account-type'] as string) || 'student',
-      email: data.email || '',
+      accounttype: typeof inAccType === 'string' && inAccType.length !== 0 ? inAccType : 'student',
+      email: typeof data.email === 'string' && data.email.length !== 0 ? data.email : '',
       joindate: timestamp,
       lastonline: timestamp,
       status: 'online',
@@ -99,7 +101,7 @@ export = function (User: TheUser) {
       password: ''
     };
     ['picture', 'fullname', 'location', 'birthday'].forEach((field) => {
-      if (data[field]) {
+      if (data[field] !== null && data[field] !== undefined) {
         userData[field] = data[field] as string
       }
     })
@@ -111,7 +113,7 @@ export = function (User: TheUser) {
     }
 
     const renamedUsername: string = await User.uniqueUsername(userData) as string
-    const userNameChanged = !!renamedUsername
+    const userNameChanged = Boolean(renamedUsername) // is this same as !! ?
     if (userNameChanged) {
       userData.username = renamedUsername
       userData.userslug = slugify(renamedUsername) as string
@@ -143,7 +145,7 @@ export = function (User: TheUser) {
       ['users:reputation', 0, userData.uid]
     ]
 
-    if (userData.fullname) {
+    if (userData.fullname !== null && userData.fullname !== undefined) {
       bulkAdd.push(['fullname:sorted', 0, `${userData.fullname.toLowerCase()}:${userData.uid}`])
     }
 
@@ -159,19 +161,25 @@ export = function (User: TheUser) {
       /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
     ])
 
+    // Disable to pass previously written unit tests
+    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (userData.email && isFirstUser) {
       await user.email.confirmByUid(userData.uid)
     }
 
+    // Disable to pass previously written unit tests
+    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (userData.email && userData.uid > 1) {
       await user.email.sendValidationEmail(userData.uid, {
         email: userData.email,
         template: 'welcome',
         // The next line calls a function in a module that has not been updated to TS yet
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call
+        /* eslint-disable @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call */
+        /* eslint-disable @typescript-eslint/strict-boolean-expressions */
         subject: `[[email:welcome-to, ${(meta.config.title as string) || (meta.config.browserTitle as string) || 'NodeBB'}]]`
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call
+        /* eslint-enable @typescript-eslint/strict-boolean-expressions */
       }).catch(err => winston.error(`[user.create] Validation email failed to send\n[emailer.send] ${err.stack as string}`))
+      /* eslint-enable @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call */
     }
     if (userNameChanged) {
       await user.notifications.sendNameChangeNotification(userData.uid, userData.username)
@@ -195,7 +203,7 @@ export = function (User: TheUser) {
     await User.isDataValid(data)
 
     await lock(data.username, '[[error:username-taken]]')
-    if (data.email && data.email !== data.username) {
+    if (data.email !== undefined && data.email !== data.username) {
       await lock(data.email, '[[error:email-taken]]')
     }
 
@@ -208,19 +216,22 @@ export = function (User: TheUser) {
   }
 
   User.isDataValid = async function (userData: Data): Promise<void> {
-    if (userData.email && !utils.isEmailValid(userData.email)) {
+    if (userData.email !== null && userData.email !== undefined &&
+      !(utils.isEmailValid(userData.email) as boolean)) {
       throw new Error('[[error:invalid-email]]')
     }
 
-    if (!utils.isUserNameValid(userData.username) || !userData.userslug) {
+    if (!(utils.isUserNameValid(userData.username) as boolean) ||
+      userData.userslug === null || userData.userslug === undefined ||
+      userData.userslug.length <= 0) {
       throw new Error(`[[error:invalid-username, ${userData.username}]]`)
     }
 
-    if (userData.password) {
+    if (userData.password !== null && userData.password !== undefined) {
       User.isPasswordValid(userData.password)
     }
 
-    if (userData.email) {
+    if (userData.email !== null && userData.email !== undefined) {
       const available = await user.email.available(userData.email)
       if (!available) {
         throw new Error('[[error:email-taken]]')
@@ -230,10 +241,9 @@ export = function (User: TheUser) {
 
   User.isPasswordValid = function (password: string, minStrength?: number): void {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call
-    minStrength = (minStrength || minStrength === 0) ? minStrength : meta.config.minimumPasswordStrength as number
-
+    minStrength = minStrength ?? (meta.config.minimumPasswordStrength as number)
     // Sanity checks: Checks if defined and is string
-    if (!password || !utils.isPasswordValid(password)) {
+    if (password === null || password === undefined || !(utils.isPasswordValid(password) as boolean)) {
       throw new Error('[[error:invalid-password]]')
     }
 
@@ -263,7 +273,7 @@ export = function (User: TheUser) {
       const exists: boolean = await meta.userOrGroupExists(username)
       /* eslint-enable @typescript-eslint/no-unsafe-assignment, no-await-in-loop */
       if (!exists) {
-        return numTries ? username : null
+        return numTries !== 0 ? username : null
       }
       username = `${userData.username} ${numTries.toString(32)}`
       numTries += 1
