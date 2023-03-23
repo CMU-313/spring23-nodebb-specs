@@ -31,17 +31,17 @@ interface UserData {
 interface deleting {
   delete?: (callerUid: string, uid: string) =>
   Promise<UserData>
-  deleteContent?: (arg0: string, arg1: string) =>
+  deleteContent: (arg0: string, arg1: string) =>
   Promise<void>
-  deleteAccount?: (arg0: string) =>
+  deleteAccount: (arg0: string) =>
   Promise<UserData>
-  deleteUpload?: (arg0: string, arg1: string, arg2: string[]) =>
+  deleteUpload: (arg0: string, arg1: string, arg2: string[]) =>
   Promise<UserData>
   auth: {
-    revokeAllSessions?: (arg0: string) => Promise<void>
+    revokeAllSessions: (arg0: string) => Promise<void>
   }
   reset: {
-    cleanByUid?: (arg0: string) => Promise<void>
+    cleanByUid: (arg0: string) => Promise<void>
   }
 }
 
@@ -62,7 +62,7 @@ module.exports = function (User: deleting) {
     await batch.processSortedSet(`uid:${uid}:posts`, async (pids: string) => { await posts.purge(pids, callerUid) }, { alwaysStartAt: 0, batch: 500 })
   }
 
-  async function deleteTopicsHelper (tid: string, callerUid: string) {
+  async function deleteTopicsHelper (tid: string, callerUid: string): Promise<void> {
     // The next line calls a function in a module that has not been updated to TS yet
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await topics.purge(tid, callerUid)
@@ -72,7 +72,7 @@ module.exports = function (User: deleting) {
     // The next line calls a function in a module that has not been updated to TS yet
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     await batch.processSortedSet(`uid:${uid}:topics`, async (ids: string[]) => {
-      const promises = []
+      const promises: Promise<void>[] = []
       for (const tid of ids) {
         promises.push(deleteTopicsHelper(tid, callerUid))
       }
@@ -103,14 +103,14 @@ module.exports = function (User: deleting) {
       ).map((d: { id: string }) => d.id)
       deleteIds.concat(userQueuedIds)
     }, { batch: 500 })
-    const promises = []
+    const promises: Promise<void>[] = []
     for (const id of deleteIds) {
       promises.push(deleteQueuedHelper(id))
     }
     await Promise.all(promises)
   }
 
-  User.deleteContent = async function (callerUid, uid) {
+  User.deleteContent = async function (callerUid, uid): Promise<void> {
     if (parseInt(uid, 10) <= 0) {
       throw new Error('[[error:invalid-uid]]')
     }
@@ -124,6 +124,7 @@ module.exports = function (User: deleting) {
     await deleteQueued(uid)
     delete deletesInProgress[uid]
   }
+
   async function removeFromSortedSets (uid: string) {
     // The next line calls a function in a module that has not been updated to TS yet
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
@@ -158,7 +159,7 @@ module.exports = function (User: deleting) {
     ])
     const pids = _.uniq(upvotedPids.concat(downvotedPids).filter(Boolean))
 
-    const promises = []
+    const promises: Promise<void>[] = []
     for (const pid of pids) {
       promises.push(deleteVotesHelper(pid, uid))
     }
@@ -210,7 +211,7 @@ module.exports = function (User: deleting) {
       /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
     }
     async function updateCount (uids: string[], name: string, fieldName: string) {
-      const promises = []
+      const promises: Promise<void>[] = []
       for (const uid of uids) {
         promises.push(updateCountHelper(name, uid, fieldName))
       }

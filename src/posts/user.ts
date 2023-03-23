@@ -26,7 +26,7 @@ export interface PostsUser {
 interface UserData {
   uid: number
   username: string
-  fullname: string
+  fullname: string | undefined
   userslug: string
   reputation: number
   postcount: number
@@ -163,7 +163,7 @@ module.exports = function (Posts: PostsUser) {
     return groupsMap
   }
 
-  async function checkGroupMembership (uid, groupTitleArray): Promise<boolean[]> {
+  async function checkGroupMembership (uid, groupTitleArray): Promise<boolean[] | null> {
     if (!Array.isArray(groupTitleArray) || (groupTitleArray.length === 0)) {
       return null
     }
@@ -200,7 +200,7 @@ module.exports = function (Posts: PostsUser) {
       userData.signature = validator.escape(String(userData.signature || '')) as string
       // The next line calls a function in a module that has not been updated to TS yet
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      userData.fullname = userSettings[index].showfullname ? validator.escape(String(userData.fullname || '')) as string : undefined
+      userData.fullname = userSettings[index].showfullname ? (validator.escape(String(userData.fullname || '')) as string) : ''
       userData.selectedGroups = []
       // The next line calls a function in a module that has not been updated to TS yet
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -215,7 +215,7 @@ module.exports = function (Posts: PostsUser) {
     }
     // type Profile
     const result: UserData[] = await Promise.all(userData.map(async (userData) => {
-      const [isMemberOfGroups, signature, customProfileInfo]: [boolean[], string, CustomProfileInfo] =
+      const [isMemberOfGroups, signature, customProfileInfo]: [boolean[] | null, string, CustomProfileInfo] =
                 await Promise.all([
                   checkGroupMembership(userData.uid, userData.groupTitleArray),
                   parseSignature(userData, uid, uidsSignatureSet),
@@ -314,7 +314,7 @@ module.exports = function (Posts: PostsUser) {
     // The next few lines call a function in a module that has not been updated to TS yet
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     await db.sortedSetIncrBy(`tid:${tid}:posters`, posts.length, toUid)
-    const promises = []
+    const promises: Promise<void>[] = []
     for (const uid of Object.keys(postsByUser)) {
       promises.push(updatePostsByUser(tid, posts, uid))
     }
@@ -322,7 +322,7 @@ module.exports = function (Posts: PostsUser) {
   }
 
   async function updateTopicPosters (postData: PostData[], toUid: string) {
-    const promises = []
+    const promises: Promise<void>[] = []
     const postsByTopic = _.groupBy(postData, p => p.tid)
     // console.log(postsByTopic)
     for (const tid of Object.keys(postsByTopic)) {
@@ -351,7 +351,7 @@ module.exports = function (Posts: PostsUser) {
     }
   }
   async function reduceTopicCounts (postsByUser: { [key: string]: PostData[] }): Promise<Promise<void>> {
-    const promises = []
+    const promises: Promise<void>[] = []
     for (const uid of Object.keys(postsByUser)) {
       const posts = postsByUser[uid]
       promises.push(userIncrement(uid, posts))
@@ -373,8 +373,8 @@ module.exports = function (Posts: PostsUser) {
       return
     }
 
-    const bulkAdd = []
-    const bulkRemove = []
+    const bulkAdd: (string | number)[][] = []
+    const bulkRemove: (string | number)[][] = []
     const postsByUser: { [key: string]: PostData[] } = { }
     mainPosts.forEach((post) => {
       bulkRemove.push([`cid:${post.cid}:uid:${post.uid}:tids`, post.tid])
@@ -420,8 +420,8 @@ module.exports = function (Posts: PostsUser) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     const cids: number[] = await Posts.getCidsByPids(pids)
 
-    const bulkRemove = []
-    const bulkAdd = []
+    const bulkRemove: (string | number)[][] = []
+    const bulkAdd: (string | number)[][] = []
     let repChange = 0
     const postsByUser: { [key: string]: PostData[] } = {}
     postData.forEach((post, i) => {

@@ -48,7 +48,7 @@ function isErrnoException (e: unknown): e is NodeJS.ErrnoException {
   return e instanceof Error
 }
 
-let codeCache: string[] = null
+let codeCache: string[] | null = null
 export async function listCodes (): Promise<string[]> {
   if (codeCache && (codeCache.length > 0)) {
     return codeCache
@@ -66,17 +66,18 @@ export async function listCodes (): Promise<string[]> {
       throw err
     }
   }
+  return []
 }
 
-let listCache: LanguageData[] = null
-export async function list (): Promise<LanguageData[]> {
+let listCache: (LanguageData | undefined)[] = [undefined]
+export async function list (): Promise<(LanguageData | undefined)[]> {
   if (listCache && (listCache.length > 0)) {
     return listCache
   }
 
   const codes = await listCodes()
 
-  let languages: LanguageData[] = []
+  let languages: (LanguageData | undefined)[] = []
   languages = await Promise.all(codes.map(async (folder) => {
     try {
       const configPath: string = path.join(languagesPath, folder, 'language.json')
