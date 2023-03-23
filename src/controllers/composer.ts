@@ -42,7 +42,7 @@ export async function get (req: Request, res: Response<object, Locals>, callback
   if (res.headersSent) {
     return
   }
-  if (!data || !data.templateData) {
+  if (data === undefined || data.templateData === undefined) {
     return callback(new Error('[[error:invalid-data]]'))
   }
 
@@ -92,7 +92,7 @@ export async function post (
   }
   req.body.noscript = 'true'
 
-  if (!data.content) {
+  if (data.content === '') {
     return await (await helpers.noScriptErrors(req, res, '[[error:invalid-data]]', 400) as Promise<void>)
   }
 
@@ -112,10 +112,10 @@ export async function post (
 
   try {
     let result: QueueResult
-    if (body.tid) {
+    if (body.tid != null) {
       data.tid = body.tid
       result = await queueOrPost(topics.reply as PostFnType, data)
-    } else if (body.cid) {
+    } else if (body.cid != null) {
       data.cid = body.cid
       data.title = body.title
       data.tags = []
@@ -125,15 +125,19 @@ export async function post (
       throw new Error('[[error:invalid-data]]')
     }
     if (result.queued) {
-      return res.redirect(`${nconf.get('relative_path') as string || '/'}?noScriptMessage=[[success:post-queued]]`)
+      let path = '/'
+      if (nconf.get('relative_path') !== null && nconf.get('relative_path') !== undefined) {
+        path = nconf.get('relative_path') as string
+      }
+      return res.redirect(`${path}?noScriptMessage=[[success:post-queued]]`)
     }
-    const uid: number = result.uid ? result.uid : result.topicData.uid
+    const uid: number = (result.uid !== null && result.uid !== undefined) ? result.uid : result.topicData.uid
 
     // The next line calls a function in a module that has not been updated to TS yet
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     user.updateOnlineUsers(uid)
 
-    const path: string = result.pid ? `/post/${result.pid}` : `/topic/${result.topicData.slug}`
+    const path: string = result.pid != null ? `/post/${result.pid}` : `/topic/${result.topicData.slug}`
     res.redirect((nconf.get('relative_path') as string) + path)
   } catch (err: unknown) {
     if (err instanceof Error) {

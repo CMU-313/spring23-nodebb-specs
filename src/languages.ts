@@ -34,7 +34,7 @@ export async function get (language: string, namespace: string): Promise<Record<
   }
   const data: string = await fs.promises.readFile(pathToLanguageFile, 'utf8')
 
-  const parsed: Record<string, string> = JSON.parse(data) as Record<string, string> || {}
+  const parsed: Record<string, string> = JSON.parse(data) as Record<string, string>
 
   const result: LanguageResult = await plugins.hooks.fire('filter:languages.get', {
     language,
@@ -50,7 +50,7 @@ function isErrnoException (e: unknown): e is NodeJS.ErrnoException {
 
 let codeCache: string[] | null = null
 export async function listCodes (): Promise<string[]> {
-  if (codeCache && (codeCache.length > 0)) {
+  if (codeCache != null && (codeCache.length > 0)) {
     return codeCache
   }
   try {
@@ -69,15 +69,15 @@ export async function listCodes (): Promise<string[]> {
   return []
 }
 
-let listCache: (LanguageData | undefined)[] | null = null
-export async function list (): Promise<(LanguageData | undefined)[] | undefined > {
-  if (listCache && (listCache.length > 0)) {
+let listCache: Array<(LanguageData | undefined)> | null = null
+export async function list (): Promise<Array<(LanguageData | undefined)> | undefined > {
+  if (listCache != null && (listCache.length > 0)) {
     return listCache
   }
 
   const codes = await listCodes()
 
-  let languages: (LanguageData | undefined)[] = []
+  let languages: Array<(LanguageData | undefined)> = []
   languages = await Promise.all(codes.map(async (folder) => {
     try {
       const configPath: string = path.join(languagesPath, folder, 'language.json')
@@ -95,7 +95,7 @@ export async function list (): Promise<(LanguageData | undefined)[] | undefined 
   }))
 
   // filter out invalid ones
-  languages = languages.filter(lang => lang && lang.code && lang.name && lang.dir)
+  languages = languages.filter(lang => lang?.code != null && lang.name != null && lang.dir != null)
 
   listCache = languages
 
