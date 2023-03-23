@@ -10,7 +10,7 @@ import { Network } from './types'
 let postSharing: Network[] | null = null
 
 export async function getPostSharing (): Promise<Network[]> {
-  if (postSharing) {
+  if (postSharing != null) {
     return _.cloneDeep(postSharing)
   }
 
@@ -45,7 +45,7 @@ export async function getPostSharing (): Promise<Network[]> {
 
 export async function getActivePostSharing (): Promise<Network[]> {
   const networks: Network[] = await getPostSharing()
-  return networks.filter(network => network && network.activated)
+  return networks.filter(network => network?.activated)
 }
 
 export async function setActivePostSharingNetworks (networkIDs: string[]): Promise<void> {
