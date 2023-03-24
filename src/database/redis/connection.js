@@ -1,7 +1,10 @@
+
 'use strict';
+
 const nconf = require('nconf');
 const Redis = require('ioredis');
 const winston = require('winston');
+
 const connection = module.exports;
 connection.connect = async function (options) {
     return new Promise((resolve, reject) => {
