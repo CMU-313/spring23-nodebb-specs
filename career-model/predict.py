@@ -1,7 +1,10 @@
-import pandas as pd
+from fastapi import FastAPI, HTTPException
 import joblib
+import pandas as pd
 from pydantic import BaseModel, Field
 from pydantic.tools import parse_obj_as
+import re
+import requests
 
 # Pydantic Models
 class Student(BaseModel):
@@ -20,9 +23,15 @@ class Student(BaseModel):
 class PredictionResult(BaseModel):
     good_employee: int
 
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
 
 # Main Functionality
-def predict(student):
+@app.get("/prediction/{id}/{s_major}/{s_age}/{s_gender}/{s_gpa}/{s_extra_curricular}/{s_num_programming_languages}/{s_num_past_internships}")
+def predict(id, s_major, s_age, s_gender, s_gpa, s_extra_curricular, s_num_programming_languages, s_num_past_internships):
     '''
     Returns a prediction on whether the student will be a good employee
     based on given parameters by using the ML model
@@ -39,8 +48,38 @@ def predict(student):
         'good_employee' which is either 1 (will be a good employee) or 0 (will
         not be a good employee)
     '''
+    args = [
+        id,
+        s_major,
+        s_age,
+        s_gender,
+        s_gpa,
+        s_extra_curricular,
+        s_num_programming_languages,
+        s_num_past_internships,
+    ]
+
+    if any(arg is None for arg in args):
+        raise HTTPException(status_code=404, detail="Missing student field")
+
+    # Replace spaces with underscore characters, when applicable. Make lowercase
+    for arg in args:
+        arg = re.sub(r"[^\w\s]", '', arg.lower())
+        arg = re.sub(r"\s+", '_', arg)
+        print(arg)
+
     # Use Pydantic to validate model fields exist
-    student = parse_obj_as(Student, student)
+    student_dict = {
+        'student_id': id,
+        'major': s_major,
+        'age': s_age,
+        'gender': s_gender,
+        'gpa': s_gpa,
+        'extra_curricular': s_extra_curricular,
+        'num_programming_languages': s_num_programming_languages,
+        'num_past_internships': s_num_past_internships,
+    }
+    student = parse_obj_as(Student, student_dict)
 
     clf = joblib.load('./model.pkl')
     
