@@ -9,6 +9,7 @@ const Career = module.exports;
 Career.register = async (req, res) => {
     const userData = req.body;
     try {
+        console.log("hi")
         const userCareerData = {
             student_id: userData.student_id,
             major: userData.major,
@@ -19,15 +20,22 @@ Career.register = async (req, res) => {
             num_programming_languages: userData.num_programming_languages,
             num_past_internships: userData.num_past_internships,
         };
-        // What URL should look like: ???/prediction/student1/computer_science/20/m/40/mens_basketball/1/2
-        const domain = "localhost:444"
-        let url = domain + '/' + userCareerData.student_id + '/' + userCareerData.major.replace(/ /g,"_") + '/' + userCareerData.age +  '/' + userCareerData.gender + '/' + userCareerData.gpa.replace('.',"?") + '/' + userCareerData.extra_curricular.replace(/ /g,"_").replace("'","") + '/' + userCareerData.num_programming_languages + '/' + userCareerData.num_past_internships
-        url = url.toLowerCase()
-        await request(url, { json: true }, 
-        (err, response, body) => {
-            
-            userCareerData.prediction = body.good_employee
-        });    
+        const url = "http://0.0.0.0:8080/prediction"
+        console.log(url)
+        
+        // Send POST request with userCareerData as JSON object
+        try {
+            const config = {
+                method: 'POST',
+                body: JSON.stringify(userCareerData)
+            }
+            const response = await fetch(url, config)
+            if (response.ok) {
+                console.log(response)
+            }
+        } catch (error) {
+            console.log("Could not send successful HTTPS request")
+        }
 
         // userCareerData.prediction = Math.round(Math.random()); // TODO: Change this line to do call and retrieve actual candidate success prediction from the model instead of using a random number
         await user.setCareerData(req.uid, userCareerData);
