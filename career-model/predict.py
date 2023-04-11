@@ -87,6 +87,8 @@ def predict(id, s_major, s_age, s_gender, s_gpa, s_extra_curricular, s_num_progr
                 act_split[idx] = act_split[idx].lower()
                 arg = ' '.join(act_split)
         # Reformat GPA from '#?#' -> '#.#'
+        # TODO: THIS DOESN'T WORK RIGHT NOW, 
+        # BUT IT DOES WORK WITH WHOLE NUMBERS
         if i == 4:
             arg = arg.replace('?', '.')
         # Reformat student's extracurriculars
@@ -117,5 +119,5 @@ def predict(id, s_major, s_age, s_gender, s_gpa, s_extra_curricular, s_num_progr
     student = student.dict(by_alias=True)
     query = pd.DataFrame(student, index=[0])
     prediction = clf.predict(query) # TODO: Error handling ??
-
-    return { 'good_employee': prediction[0] }
+    prediction = prediction.item()
+    return { 'good_employee': prediction }
