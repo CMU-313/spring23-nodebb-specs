@@ -27,20 +27,28 @@ Career.register = async (req, res) => {
         try {
             const config = {
                 method: 'POST',
-                body: JSON.stringify(userCareerData)
+                body: JSON.stringify(userCareerData),
+                headers: {
+                    'Accept': 'application/json',
+                    'content-type': 'application/json',
+                },
+                dataType: 'json',
             }
             const response = await fetch(url, config)
+            console.log(response)
             if (response.ok) {
-                console.log(response)
+                const json = await response.json()
+                userCareerData.prediction = json.good_employee
+                console.log(userCareerData.prediction)
+                await user.setCareerData(req.uid, userCareerData, () => {
+                    db.sortedSetAdd('users:career', req.uid, req.uid);
+                    res.json({});
+                });
             }
         } catch (error) {
+            console.log(error)
             console.log("Could not send successful HTTPS request")
         }
-
-        // userCareerData.prediction = Math.round(Math.random()); // TODO: Change this line to do call and retrieve actual candidate success prediction from the model instead of using a random number
-        await user.setCareerData(req.uid, userCareerData);
-        db.sortedSetAdd('users:career', req.uid, req.uid);
-        res.json({});
     } catch (err) {
         console.log(err);
         helpers.noScriptErrors(req, res, err.message, 400);
