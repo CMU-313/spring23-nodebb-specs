@@ -20,7 +20,7 @@ Career.register = async (req, res) => {
             num_programming_languages: userData.num_programming_languages,
             num_past_internships: userData.num_past_internships,
         };
-        const url = "http://0.0.0.0:8080/prediction"
+        const url = "https://ml-career-model.fly.dev/prediction"
         console.log(url)
         
         // Send POST request with userCareerData as JSON object
